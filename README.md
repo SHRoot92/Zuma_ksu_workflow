@@ -1,4 +1,4 @@
-# Wild Kernels for Android
+# Sultan Kernels for Cheetah
 
 ## Your warranty is no longer valid!
 
