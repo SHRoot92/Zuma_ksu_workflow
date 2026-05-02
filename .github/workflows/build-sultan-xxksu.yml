@@ -225,8 +225,15 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
           
-          # 直接使用 artifacts 目录下的 zip 文件
-          gh release create "$TAG" ./artifacts/*.zip \
+          # Use find to locate the zip file
+          ZIP_FILE=$(find ./artifacts -name "*.zip" -type f | head -1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No zip file found!"
+            exit 1
+          fi
+          echo "Found zip file: $ZIP_FILE"
+          
+          gh release create "$TAG" "$ZIP_FILE" \
             --title "Kernel Build — $TAG" \
             --notes "
             ### 🚀 Build Information
