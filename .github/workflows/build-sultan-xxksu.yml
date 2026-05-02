@@ -13,7 +13,6 @@ env:
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_REPO: backslashxx/KernelSU
   KSU_BRANCH: master
-  KSU_COMMIT: 32472
   GCC_VERSION: "14.2.0"
   GCC_ARCHIVE_URL: "https://kernel.org/pub/tools/crosstool/files/bin/x86_64/14.2.0/x86_64-gcc-14.2.0-nolibc-aarch64-linux.tar.gz"
 
@@ -203,6 +202,13 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: ./artifacts
+          merge-multiple: true
+      - name: List artifacts (debug)
+        run: |
+          echo "=== artifacts directory contents ==="
+          ls -la ./artifacts/
+          echo "=== find zip files ==="
+          find ./artifacts -name "*.zip" -type f
       - name: Tag and Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -213,12 +219,14 @@ jobs:
           MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
           REV=$(( ${MAX_REV:-0} + 1 ))
           TAG="${DATE}-r${REV}"
+          
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git tag "$TAG"
           git push origin "$TAG"
           
-          gh release create "$TAG" artifacts/**/*.zip \
+          # 直接使用 artifacts 目录下的 zip 文件
+          gh release create "$TAG" ./artifacts/*.zip \
             --title "Kernel Build — $TAG" \
             --notes "
             ### 🚀 Build Information
