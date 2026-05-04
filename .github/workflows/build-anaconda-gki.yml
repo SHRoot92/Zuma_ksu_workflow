@@ -90,7 +90,7 @@ jobs:
       - name: Setup atp4pixel Config Pillars
         run: |
           cd sultan
-          DEFCONFIG="arch/arm64/configs/gs201_defconfig"
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
           
           echo "" >> "$DEFCONFIG"
 
