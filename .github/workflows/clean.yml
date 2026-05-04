@@ -1,0 +1,110 @@
+name: Clean Orphan Tags
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'  # 每周日午夜自动运行
+
+jobs:
+  clean-orphan-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Clean orphan tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "🔍 Fetching all tags and releases..."
+          
+          # 获取所有有 Release 的 tag
+          echo "📋 Getting tags with releases..."
+          gh release list --limit 1000 --json tagName --jq '.[].tagName' > released_tags.txt || echo "" > released_tags.txt
+          
+          echo "✅ Tags with releases:"
+          cat released_tags.txt
+          echo "---"
+          
+          # 获取所有远程 tag
+          echo "🏷️  Getting all remote tags..."
+          git tag -l | sort > all_tags.txt
+          
+          echo "📊 All tags:"
+          cat all_tags.txt
+          echo "---"
+          
+          # 找出孤儿 tag（存在于 all_tags.txt 但不在 released_tags.txt）
+          echo "🕵️  Finding orphan tags..."
+          ORPHAN_TAGS=$(comm -23 all_tags.txt released_tags.txt)
+          
+          if [ -z "$ORPHAN_TAGS" ]; then
+            echo "✨ No orphan tags found! All tags are associated with releases."
+            exit 0
+          fi
+          
+          echo "🗑️  Orphan tags to be deleted:"
+          echo "$ORPHAN_TAGS"
+          echo "---"
+          
+          # 删除孤儿 tag
+          echo "🚮 Deleting orphan tags..."
+          DELETED_COUNT=0
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "  ❌ Deleting: $tag"
+              git push origin --delete "$tag" && ((DELETED_COUNT++)) || echo "  ⚠️  Failed to delete: $tag"
+            fi
+          done <<< "$ORPHAN_TAGS"
+          
+          echo "---"
+          echo "✅ Cleanup complete! Deleted $DELETED_COUNT orphan tags."
+          
+          # 生成清理报告
+          echo "## 🧹 Tag Cleanup Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-----|" >> $GITHUB_STEP_SUMMARY
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "| 🗑️ Deleted | \`$tag\` |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done <<< "$ORPHAN_TAGS"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total orphan tags deleted:** $DELETED_COUNT" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify cleanup
+        if: success()
+        run: |
+          echo "🔍 Verifying cleanup..."
+          git fetch --prune --tags
+          REMAINING_TAGS=$(git tag -l | wc -l)
+          echo "✅ Remaining tags: $REMAINING_TAGS"
+          echo "Current tags:"
+          git tag -l
+
+  # 可选的：生成清理历史记录
+  log-cleanup:
+    needs: clean-orphan-tags
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create cleanup log
+        run: |
+          echo "📝 Creating cleanup log..."
+          DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+          echo "Cleanup executed at: $DATE" > cleanup.log
+          echo "Repository: ${{ github.repository }}" >> cleanup.log
+          echo "Workflow run: ${{ github.run_id }}" >> cleanup.log
+          
+      - name: Upload cleanup log
+        uses: actions/upload-artifact@v7
+        with:
+          name: cleanup-log-${{ github.run_id }}
+          path: cleanup.log
+          retention-days: 30
