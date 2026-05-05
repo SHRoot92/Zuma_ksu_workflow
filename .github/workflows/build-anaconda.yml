@@ -264,14 +264,14 @@ jobs:
             ### 🚀 Build Information
             | Component | Details |
             | :--- | :--- |
-            | **Kernel Base** | Sultan ($S_TAG) |
+            | **Kernel Base** | anaconda ($S_TAG) |
             | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
             | **xxKSU Ver** | \`r$K_VER\` |
             | **SUSFS Ver** | \`$SU_VER\` |
             | **Compiler** | GCC $GCC_VER |
             
             ### 🛠️ Networking Features (Fortress)
-            - **TCP Congestion:** BBR (v1) + FQ
+            - **TCP Congestion:** BBR (v3) + FQ
             - **Routing:** Policy Routing (Table 1066) + IPSet (64k)
             - **Fixes:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
             
