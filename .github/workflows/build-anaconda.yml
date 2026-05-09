@@ -33,7 +33,7 @@ jobs:
           
           wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.gz
           tar -xf gcc.tar.gz
-          echo "TOOLCHAIN_PATH=$GITHUB_WORKSPACE/gcc-${{ env.GCC_VERSION }}-nolibc/aarch64-linux/bin/aarch64-linux-" >> $GITHUB_ENV
+          echo "TOOLCHAIN_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
 
       - name: Clone source and dependencies
         run: |
