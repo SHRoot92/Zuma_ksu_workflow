@@ -252,13 +252,13 @@ jobs:
             --notes "
             ### 🚀 Build Information
 
-| Component | Details |
-| :--- | :--- |
-| **Kernel Base** | anaconda ($S_TAG) |
-| **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
-| **xxKSU Ver** | \`r$K_VER\` |
-| **SUSFS Ver** | \`$SU_VER\` |
-| **Compiler** | GCC $GCC_VER |
+          | Component | Details |
+          | :--- | :--- |
+          | **Kernel Base** | anaconda ($S_TAG) |
+          | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
+          | **xxKSU Ver** | \`r$K_VER\` |
+          | **SUSFS Ver** | \`$SU_VER\` |
+          | **Compiler** | GCC $GCC_VER |
 
             ### 🛠️ Networking Features (Fortress)
             - **TCP Congestion:** BBR (v3) + FQ
