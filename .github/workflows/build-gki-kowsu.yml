@@ -68,7 +68,7 @@ jobs:
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r11.tar.gz" -o common.tar.gz
           mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
           git clone --depth=1 https://github.com/yapixel/kernel_patches kernel_patches
-          git clone --depth=1 --branch="gki-android14-6.1-dev" "https://gitlab.com/simonpunk/susfs4ksu" susfs4ksu
+          git clone --depth=1 --branch="gki-android14-6.1" "https://gitlab.com/simonpunk/susfs4ksu" susfs4ksu
           cd susfs4ksu
           git checkout ef16cbce5c5195988b9b630de85466148cbbcdef
 
