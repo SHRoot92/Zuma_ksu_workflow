@@ -70,7 +70,7 @@ jobs:
           git clone --depth=1 https://github.com/yapixel/kernel_patches kernel_patches
           git clone --depth=1 --branch="gki-android14-6.1" "https://gitlab.com/simonpunk/susfs4ksu" susfs4ksu
           cd susfs4ksu
-          git checkout ef16cbce5c5195988b9b630de85466148cbbcdef
+          git checkout f3016efe0b84c98153924b9c8dbdb06577ff115b
 
       - name: Setup KowSU
         run: |
