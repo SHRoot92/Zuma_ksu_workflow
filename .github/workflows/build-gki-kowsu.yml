@@ -60,6 +60,8 @@ jobs:
 
       - name: Sync Sources
         run: |
+          mkdir -p kernel_workspace && cd kernel_workspace 
+          
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r11.tar.gz" -o common.tar.gz
           mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
           git clone --depth=1 --branch="gki-android14-6.1-dev" "https://gitlab.com/simonpunk/susfs4ksu" susfs4ksu
@@ -67,7 +69,7 @@ jobs:
 
       - name: Setup KowSU
         run: |
-          cd common
+          cd kernel_workspace/common
           git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
@@ -83,7 +85,7 @@ jobs:
           
       - name: Setup SuSFS
         run: |
-          set -e
+          cd kernel_workspace/common
           cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
           cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
           cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
@@ -94,8 +96,7 @@ jobs:
 
       - name: Build Kernel
         run: |
-          set -euo pipefail
-          cd kernel
+          cd kernel_workspace/common
           export ARCH=arm64
           export CROSS_COMPILE="${ARM64_TOOLCHAIN}"
           export CROSS_COMPILE_COMPAT="${ARM32_TOOLCHAIN}"
