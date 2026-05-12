@@ -1,4 +1,4 @@
-name: Build Sultan + xxKSU
+name: Build Sultan + xxKSU with arm gcc
 
 on:
   workflow_dispatch:
