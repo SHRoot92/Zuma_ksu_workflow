@@ -69,8 +69,7 @@ jobs:
           mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
           git clone --depth=1 https://github.com/yapixel/kernel_patches kernel_patches
           git clone --branch="gki-android14-6.1" "https://gitlab.com/simonpunk/susfs4ksu" susfs4ksu
-          cd susfs4ksu
-          git checkout c93d93c
+          
 
       - name: Setup KowSU
         run: |
