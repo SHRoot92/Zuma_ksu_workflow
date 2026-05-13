@@ -47,7 +47,7 @@ jobs:
           cd sultan
           git submodule update --init --recursive
           cd ..
-          git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
+          git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b gki-2.0 AK3
           git clone --depth=1 "${{ env.PATCHES_REPO }}" -b dev kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
