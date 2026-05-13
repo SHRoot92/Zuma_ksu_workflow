@@ -87,7 +87,7 @@ jobs:
       - name: Setup atp4pixel Config Pillars
         run: |
           cd sultan
-          DEFCONFIG="arch/arm64/configs/gs201_defconfig"
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
           
           echo "" >> "$DEFCONFIG"
           cat <<EOF >> "$DEFCONFIG"
@@ -192,7 +192,7 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
           CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
       - name: Package AnyKernel3
         id: package
@@ -212,7 +212,7 @@ jobs:
           ( cd AK3 && zip -r9 "../${ZIP_NAME}" . -x "*.git*" )
           echo "ZIP_PATH=$GITHUB_WORKSPACE/${ZIP_NAME}" >> "$GITHUB_ENV"
       - name: Upload kernel ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: gs201-kernel
           path: ${{ env.ZIP_PATH }}
@@ -225,7 +225,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: ./artifacts
           merge-multiple: true
