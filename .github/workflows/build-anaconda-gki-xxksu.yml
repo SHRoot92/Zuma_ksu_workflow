@@ -192,8 +192,10 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
           CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+          #make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
+          #make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+          make O=out ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
+          make O=out ARCH=arm64 CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
       - name: Package AnyKernel3
         id: package
         run: |
