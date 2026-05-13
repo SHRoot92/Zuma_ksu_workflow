@@ -97,7 +97,8 @@ jobs:
           cd sultan
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           
-          # 强力确保禁用 GCC 插件，防止 GCC 15.2 环境下出现兼容性导致的死循环报错
+          sed -i 's/-Wno-error=uninitialized-const-pointer//g' Makefile
+          sed -i 's/-Wno-error=uninitialized-const-pointer//g' scripts/Makefile.extrawarn || true
           sed -i 's/CONFIG_GCC_PLUGINS=y/CONFIG_GCC_PLUGINS=n/' "$DEFCONFIG"
           echo "CONFIG_GCC_PLUGINS=n" >> "$DEFCONFIG"
 
