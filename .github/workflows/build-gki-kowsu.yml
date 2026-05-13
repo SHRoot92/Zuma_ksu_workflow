@@ -87,7 +87,7 @@ jobs:
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
           patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
-          patch -p1 < ../kernel_patches/kowsu/70_fix_namespace.patch
+          #patch -p1 < ../kernel_patches/kowsu/70_fix_namespace.patch
           
           cd KernelSU
           patch -p1 --forward < ../../kernel_patches/kowsu/10_enable_susfs_for_ksu.patch || true
