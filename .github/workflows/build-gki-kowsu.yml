@@ -42,7 +42,7 @@ jobs:
           set -e
           echo "CPU cores: $(nproc)"
           
-          # 安装完整的宿主机依赖，防止 GCC 15 报错 mpc.h 缺失
+          
           sudo apt-get update -qq
           sudo apt-get install -y libelf-dev pahole aria2 build-essential \
             libmpc-dev libmpfr-dev libgmp-dev bc bison flex libssl-dev libfdt-dev
@@ -77,16 +77,15 @@ jobs:
           rm -rf KernelSU drivers/kernelsu
           git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
 
-          # 建立链接并集成到 Kbuild
+         
           ln -sf ../KernelSU/kernel drivers/kernelsu
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
           grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
-          # 修正 KowSU 的目录头文件引用
+         
           echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
           
-          # 针对 GCC 15 的精准修复：解决 patch_memory.c 中的 unused-value 报错
-          # 这样即便不全局禁用 Wno-error，这里也能通过编译
+         
           sed -i 's/ksu_flush_icache((uintptr_t)dst, (uintptr_t)dst + len);/(void)ksu_flush_icache((uintptr_t)dst, (uintptr_t)dst + len);/' drivers/kernelsu/hook/arm64/patch_memory.c
 
       - name: Setup SuSFS
@@ -95,19 +94,19 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
-          patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          patch -p1 < ../kernel_patches/kowsu/50_add_susfs_in_gki-android14-6.1.patch || true
 
-          # 修复 6.1 LTS namespace.c 注入 (修正了多余的 fi 语法错误)
-          if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
-            echo "检测到 namespace.c 缺少 susfs_def.h，注入声明..."
-            sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
-            if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
-              sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n\n#define CL_COPY_MNT_NS BIT(25)\n\n#endif' ./fs/namespace.c
-            fi
-          fi
+         # # 修复 6.1 LTS namespace.c 注入 (修正了多余的 fi 语法错误)
+         # if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
+         #   echo "检测到 namespace.c 缺少 susfs_def.h，注入声明..."
+         #   sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
+         #   if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
+         #     sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n\n#define CL_COPY_MNT_NS BIT(25)\n\n#endif' ./fs/namespace.c
+         #   fi
+         # fi
           
-          cd KernelSU
-          patch -p1 --forward < ../../kernel_patches/kowsu/10_enable_susfs_for_ksu.patch || true
+         cd KernelSU
+         patch -p1 --forward < ../../kernel_patches/kowsu/10_enable_susfs_for_ksu.patch || true
 
       - name: Build Kernel
         run: |
