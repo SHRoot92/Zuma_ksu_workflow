@@ -11,7 +11,7 @@ env:
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_BRANCH: master
-  GCC_VERSION: "15.2.rel1"
+  GCC_VERSION: "14.2.rel1"
 
 jobs:
   build:
