@@ -59,7 +59,7 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
 
-          patch -p1 < ../kernel_patches/sultan/selinux_hide.patch 
+          patch -p1 < ../kernel_patches/sultan/selinux_hide-v2.patch
           
 
       - name: Global Defconfig Analysis
