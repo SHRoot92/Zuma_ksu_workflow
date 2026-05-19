@@ -1,4 +1,4 @@
-name: Build GKI + xxKSU
+Name: Build GKI + xxKSU
 
 on:
   workflow_dispatch:
@@ -78,9 +78,12 @@ jobs:
       - name: Inject Configuration
         working-directory: common
         run: |
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+          make O=out ARCH=arm64 \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
             CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
+            CC=clang \
+            HOSTCC=clang \
+            HOSTCXX=clang++ \
             gki_defconfig
           cat >> out/.config <<EOF
           # --- Core System & FS ---
@@ -149,19 +152,23 @@ jobs:
           CONFIG_CGROUP_FREEZER=y
           CONFIG_INOTIFY_USER=y
           EOF
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+          make O=out ARCH=arm64 \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
             CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
+            CC=clang \
+            HOSTCC=clang \
+            HOSTCXX=clang++ \
             olddefconfig
       - name: Build Kernel
         working-directory: common
         run: |
           make -j$(nproc) O=out \
             ARCH=arm64 \
-            LLVM=1 \
-            LLVM_IAS=1 \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
-            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}"
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
+            CC=clang \
+            HOSTCC=clang \
+            HOSTCXX=clang++
       - name: Package
         run: |
          if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
