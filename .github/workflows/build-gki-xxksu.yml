@@ -1,4 +1,4 @@
-name: Build GKI + xxKSU
+Name: Build GKI + xxKSU
 
 on:
   workflow_dispatch:
@@ -29,7 +29,8 @@ jobs:
          libelf-dev \
          libssl-dev \
          dwarves \
-         zlib1g-dev
+         zlib1g-dev \
+         zip
       - name: Download and setup Clang 23
         run: |
           mkdir -p $HOME/clang
@@ -47,6 +48,7 @@ jobs:
           tar -xJf tc.tar.xz
           rm tc.tar.xz
           TC_DIR=$(ls -d arm-gnu-toolchain-*)
+          echo "$HOME/toolchains/$TC_DIR/bin" >> $GITHUB_PATH
           echo "ARM64_TOOLCHAIN=$HOME/toolchains/$TC_DIR/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
       - name: Download ARM32 GNU Toolchain
         run: |
@@ -55,6 +57,7 @@ jobs:
           tar -xJf tc-arm.tar.xz
           rm tc-arm.tar.xz
           TC_DIR=$(ls -d arm-gnu-toolchain-*arm-none-eabi*)
+          echo "$HOME/toolchains/$TC_DIR/bin" >> $GITHUB_PATH
           echo "ARM32_TOOLCHAIN=$HOME/toolchains/$TC_DIR/bin/arm-none-eabi-" >> $GITHUB_ENV
       - name: Clone Source
         run: |
@@ -76,11 +79,8 @@ jobs:
         working-directory: common
         run: |
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            CROSS_COMPILE="$ARM64_TOOLCHAIN" \
-            CROSS_COMPILE_COMPAT="$ARM32_TOOLCHAIN" \
-            CC=clang \
-            HOSTCC=clang \
-            HOSTCXX=clang++ \
+            CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
             gki_defconfig
           cat >> out/.config <<EOF
           # --- Core System & FS ---
@@ -150,28 +150,18 @@ jobs:
           CONFIG_INOTIFY_USER=y
           EOF
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
-            CROSS_COMPILE="$ARM64_TOOLCHAIN" \
-            CROSS_COMPILE_COMPAT="$ARM32_TOOLCHAIN" \
-            CC=clang \
-            HOSTCC=clang \
-            HOSTCXX=clang++ \
+            CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
             olddefconfig
       - name: Build Kernel
         working-directory: common
         run: |
-          make -j$(nproc) \
+          make -j$(nproc) O=out \
             ARCH=arm64 \
             LLVM=1 \
             LLVM_IAS=1 \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE="$ARM64_TOOLCHAIN" \
-            CROSS_COMPILE_COMPAT="$ARM32_TOOLCHAIN" \
-            CC=clang \
-            HOSTCC=clang \
-            HOSTCXX=clang++ \
-            LD=ld.lld \
-            HOSTLD=ld.lld \
-            O=out
+            CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}"
       - name: Package
         run: |
          if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
@@ -189,7 +179,6 @@ jobs:
          zip -r9 "../$ZIP" .
 
          echo "ZIP=$ZIP" >> $GITHUB_ENV
-
 
       - name: Upload
         uses: actions/upload-artifact@v7
