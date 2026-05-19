@@ -33,9 +33,8 @@ jobs:
           
           wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.gz
           tar -xf gcc.tar.gz
-          echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
-        
-
+          echo "TOOLCHAIN_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          
       - name: Clone source and dependencies
         run: |
           git clone --depth=1 https://github.com/yapixel/anaconda_kernel_google_tensynos -b qpr3-stable sultan
