@@ -174,19 +174,22 @@ jobs:
             O=out
       - name: Package
         run: |
+         if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
+         cp common/out/arch/arm64/boot/Image.lz4 AK3/
+         else
          cp common/out/arch/arm64/boot/Image AK3/
-
-         if [ -f common/out/arch/arm64/boot/dtb ]; then
-         cp common/out/arch/arm64/boot/dtb AK3/
          fi
 
-         cd AK3
-         rm -rf .git .github
+         [ -f common/out/arch/arm64/boot/dtb ] && \
+         cp common/out/arch/arm64/boot/dtb AK3/
+
+         cd AK3 && rm -rf .git .github
 
          ZIP=gki-xxksu-$(date +%Y%m%d).zip
          zip -r9 "../$ZIP" .
 
          echo "ZIP=$ZIP" >> $GITHUB_ENV
+
 
       - name: Upload
         uses: actions/upload-artifact@v7
