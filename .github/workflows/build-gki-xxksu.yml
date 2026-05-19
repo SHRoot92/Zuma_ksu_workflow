@@ -14,20 +14,28 @@ env:
   KSU_REPO: backslashxx/KernelSU
   KSU_BRANCH: master
   KSU_COMMIT: 32493d
+
   GCC_VERSION: "14.2.0"
   GCC_ARCHIVE_URL: "https://kernel.org/pub/tools/crosstool/files/bin/x86_64/14.2.0/x86_64-gcc-14.2.0-nolibc-aarch64-linux.tar.gz"
+
+  CLANG_URL: https://github.com/ZyCromerZ/Clang/releases/download/20.0.0git-20250115-release/Clang-20.0.0git-20250115.tar.gz
 
 jobs:
   build:
     name: Build gs201 Kernel
     runs-on: ubuntu-latest
-    outputs:
-      ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
-      s_tag: ${{ steps.meta.outputs.s_tag }}
+
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Install Clang
+        run: |
+          wget -q "$CLANG_URL" -O clang.tar.gz
+          tar -xf clang.tar.gz
+          mv Clang-* clang
+          echo "CLANG_PATH=$PWD/clang/bin" >> $GITHUB_ENV
 
       - name: Install GCC
         run: |
@@ -43,14 +51,6 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
-      - name: Metadata
-        id: meta
-        run: |
-          S_TAG=$(git -C common tag --sort=-committerdate | head -n1 || echo "latest")
-          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
-          echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
-          echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
-
       - name: KSU & Patches
         working-directory: common
         run: |
@@ -58,31 +58,24 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
-          
           patch -p1 < ../kernel_patches/xxksu/scope_minimized_manual_hooks_v2_1_for_android14_6_1_2026_03_r11.patch
-          
-      - name: Global Defconfig Analysis
-        working-directory: common
-        run: |
-          echo "=== Scanning All Relevant Defconfigs ==="
-          TARGET_DEFS=("gki_defconfig")
-          CHECK_FLAGS=("CONFIG_NETFILTER_ADVANCED" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "CONFIG_KSU")
-          for def in "${TARGET_DEFS[@]}"; do
-            CONF_PATH="arch/arm64/configs/$def"
-            echo "[*] Checking $def..."
-            for flag in "${CHECK_FLAGS[@]}"; do
-              grep "$flag" "$CONF_PATH" || echo "  - $flag: missing"
-            done
-          done
 
-      - name: Inject Configuration (Fortress Deep Unlock)
+      - name: Inject Configuration (unchanged)
         working-directory: common
         env:
+          PATH: ${{ env.CLANG_PATH }}:/usr/bin
           CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CC: clang
+          HOSTCC: clang
+          HOSTCXX: clang++
         run: |
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
-          
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            CROSS_COMPILE="$CROSS_COMPILE" \
+            CC="$CC" \
+            HOSTCC="$HOSTCC" \
+            HOSTCXX="$HOSTCXX" \
+            gki_defconfig
+
           cat >> out/.config <<EOF
           # --- Core System & FS ---
           CONFIG_TMPFS_XATTR=y
@@ -149,92 +142,44 @@ jobs:
           CONFIG_TCP_CONG_WESTWOOD=n
           CONFIG_TCP_CONG_HTCP=n
           CONFIG_DEFAULT_BBR=y
-          # --- Pillar 5: xxKSU (Hookless / LSM) ---
+          # --- Pillar 5: xxKSU ---
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
-          CONFIG_KSU_ALLOWLIST_WORKAROUND=n
-          CONFIG_KSU_DEBUG=n
-          CONFIG_KSU_KPROBES_HOOK=n
-          CONFIG_KSU_TAMPER_SYSCALL_TABLE=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
-          CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
-          
-          CONFIG_SECURITY_NETWORK=y
-          CONFIG_CGROUPS=y
-          CONFIG_CGROUP_BPF=y
-          CONFIG_CGROUP_SCHED=y
-          CONFIG_CGROUP_PIDS=y
-          CONFIG_CGROUP_FREEZER=y
-          CONFIG_INOTIFY_USER=y
           EOF
-          
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig
 
-      - name: Build Kernel (Production)
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            CROSS_COMPILE="$CROSS_COMPILE" \
+            CC="$CC" \
+            HOSTCC="$HOSTCC" \
+            HOSTCXX="$HOSTCXX" \
+            olddefconfig
+
+      - name: Build Kernel
         working-directory: common
         env:
-          KBUILD_BUILD_USER: build-user
-          KBUILD_BUILD_HOST: build-host
+          PATH: ${{ env.CLANG_PATH }}:/usr/bin
           CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CC: clang
+          HOSTCC: clang
+          HOSTCXX: clang++
         run: |
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+          make -j$(nproc) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            CROSS_COMPILE="$CROSS_COMPILE" \
+            CC="$CC" \
+            HOSTCC="$HOSTCC" \
+            HOSTCXX="$HOSTCXX"
 
       - name: Package
         run: |
           cp common/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-          ZIP_NAME="gki-gs201-$(date +'%Y%m%d')-xxKSU-r${{ steps.meta.outputs.ksu_ver }}.zip"
-          ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
-          echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
+          ZIP_NAME="gki-xxksu-$(date +'%Y%m%d').zip"
+          (cd AK3 && zip -r9 ../$ZIP_NAME .)
+          echo "ZIP_PATH=$PWD/$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: common-gs201
+          name: kernel
           path: ${{ env.ZIP_PATH }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@v8
-        with:
-          path: ./artifacts
-      - name: Tag and Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          KSU_VER: ${{ needs.build.outputs.ksu_ver }}
-          S_TAG: ${{ needs.build.outputs.s_tag }}
-        run: |
-          DATE=$(date +"%Y.%m.%d")
-          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
-          REV=$(( ${MAX_REV:-0} + 1 ))
-          TAG="${DATE}-r${REV}"
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
-          
-          gh release create "$TAG" artifacts/**/*.zip \
-            --title "Kernel Build — $TAG" \
-            --notes "
-            ### 🚀 Build Information
-            | Component | Details |
-            | :--- | :--- |
-            | **Kernel Base** | GKI ($S_TAG) |
-            | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
-            | **xxKSU Ver** | \`r$KSU_VER\` |
-            | **Compiler** | GCC 14.2.0 |
-            
-            ### 🛠️ Networking Features (Fortress)
-            - **TCP Congestion:** BBR (v1) + FQ
-            - **Routing:** Policy Routing (Table 1066) + IPSet (64k)
-            - **Fixes:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
-            
-            > Built for Pixel 7 (gs201)."
