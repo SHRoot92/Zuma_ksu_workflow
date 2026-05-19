@@ -65,7 +65,7 @@ jobs:
         working-directory: common
         run: |
           echo "=== Scanning All Relevant Defconfigs ==="
-          TARGET_DEFS=("gs201_defconfig")
+          TARGET_DEFS=("gki_defconfig")
           CHECK_FLAGS=("CONFIG_NETFILTER_ADVANCED" "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE" "CONFIG_KSU")
           for def in "${TARGET_DEFS[@]}"; do
             CONF_PATH="arch/arm64/configs/$def"
