@@ -174,11 +174,20 @@ jobs:
             O=out
       - name: Package
         run: |
-          cp common/out/arch/arm64/boot/Image AK3/Image
-          cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb || true
-          ZIP=gki-xxksu-$(date +%Y%m%d).zip
-          (cd AK3 && zip -r9 ../$ZIP .)
-          echo "ZIP=$ZIP" >> $GITHUB_ENV
+         cp common/out/arch/arm64/boot/Image AK3/
+
+         if [ -f common/out/arch/arm64/boot/dtb ]; then
+         cp common/out/arch/arm64/boot/dtb AK3/
+         fi
+
+         cd AK3
+         rm -rf .git .github
+
+         ZIP=gki-xxksu-$(date +%Y%m%d).zip
+         zip -r9 "../$ZIP" .
+
+         echo "ZIP=$ZIP" >> $GITHUB_ENV
+
       - name: Upload
         uses: actions/upload-artifact@v7
         with:
