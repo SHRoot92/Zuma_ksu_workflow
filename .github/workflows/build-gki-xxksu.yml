@@ -81,7 +81,7 @@ jobs:
           CROSS_COMPILE: ${{ env.GCC_PATH }}
           CC: ${{ env.GCC_PATH }}gcc
         run: |
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gki_defconfig
           
           cat >> out/.config <<EOF
           # --- Core System & FS ---
