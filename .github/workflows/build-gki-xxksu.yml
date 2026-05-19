@@ -1,4 +1,4 @@
-Name: Build GKI + xxKSU
+name: Build GKI + xxKSU
 
 on:
   workflow_dispatch:
