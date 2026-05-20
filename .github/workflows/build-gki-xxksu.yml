@@ -175,11 +175,12 @@ jobs:
             HOSTCXX=clang++
       - name: Package
         run: |
-         if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
-         cp common/out/arch/arm64/boot/Image.lz4 AK3/
-         else
-         cp common/out/arch/arm64/boot/Image AK3/
-         fi
+         if [ -f ../common/out/arch/arm64/boot/Image.lz4 ]; then
+            cp ../common/out/arch/arm64/boot/Image.lz4 .
+          else
+            # 使用 lz4 手动压缩，确保启动头格式正确
+            lz4 -c1 -l ../common/out/arch/arm64/boot/Image > Image.lz4
+          fi
 
          cd AK3 && rm -rf .git .github
 
