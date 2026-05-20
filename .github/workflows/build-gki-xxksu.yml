@@ -177,9 +177,6 @@ jobs:
          cp common/out/arch/arm64/boot/Image AK3/
          fi
 
-         [ -f common/out/arch/arm64/boot/dtb ] && \
-         cp common/out/arch/arm64/boot/dtb AK3/
-
          cd AK3 && rm -rf .git .github
 
          ZIP=gki-xxksu-$(date +%Y%m%d).zip
