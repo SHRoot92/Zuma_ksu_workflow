@@ -173,30 +173,23 @@ jobs:
             CC=clang \
             HOSTCC=clang \
             HOSTCXX=clang++
+            
       - name: Package
         run: |
-          
           IMAGE_SRC="common/out/arch/arm64/boot/Image"
           IMAGE_LZ4_SRC="common/out/arch/arm64/boot/Image.lz4"
 
-          
           if [ -f "$IMAGE_LZ4_SRC" ]; then
             cp "$IMAGE_LZ4_SRC" AK3/Image.lz4
           else
             lz4 -c1 -l "$IMAGE_SRC" > AK3/Image.lz4
           fi
 
-         
-          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-
-          
           cd AK3 && rm -rf .git .github
-          
-          
+
           ZIP=gki-xxksu-$(date +%Y%m%d).zip
           zip -r9 "../$ZIP" .
-          
-         
+
           cd ..
           echo "ZIP=$ZIP" >> $GITHUB_ENV
 
