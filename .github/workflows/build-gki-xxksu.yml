@@ -175,19 +175,30 @@ jobs:
             HOSTCXX=clang++
       - name: Package
         run: |
-         if [ -f ../common/out/arch/arm64/boot/Image.lz4 ]; then
-            cp ../common/out/arch/arm64/boot/Image.lz4 .
+          
+          IMAGE_SRC="common/out/arch/arm64/boot/Image"
+          IMAGE_LZ4_SRC="common/out/arch/arm64/boot/Image.lz4"
+
+          
+          if [ -f "$IMAGE_LZ4_SRC" ]; then
+            cp "$IMAGE_LZ4_SRC" AK3/Image.lz4
           else
-            # 使用 lz4 手动压缩，确保启动头格式正确
-            lz4 -c1 -l ../common/out/arch/arm64/boot/Image > Image.lz4
+            lz4 -c1 -l "$IMAGE_SRC" > AK3/Image.lz4
           fi
 
-         cd AK3 && rm -rf .git .github
+         
+          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
 
-         ZIP=gki-xxksu-$(date +%Y%m%d).zip
-         zip -r9 "../$ZIP" .
-
-         echo "ZIP=$ZIP" >> $GITHUB_ENV
+          
+          cd AK3 && rm -rf .git .github
+          
+          
+          ZIP=gki-xxksu-$(date +%Y%m%d).zip
+          zip -r9 "../$ZIP" .
+          
+         
+          cd ..
+          echo "ZIP=$ZIP" >> $GITHUB_ENV
 
       - name: Upload
         uses: actions/upload-artifact@v7
