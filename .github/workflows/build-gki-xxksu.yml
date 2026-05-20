@@ -67,6 +67,7 @@ jobs:
           git clone --depth=1 $ANYKERNEL_REPO -b gki-2.0 AK3
           git clone --depth=1 $PATCHES_REPO kernel_patches
           git clone --depth=1 $SCRIPTS_REPO sh
+          
       - name: Apply KSU & patches
         working-directory: common
         run: |
@@ -74,7 +75,10 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          
           patch -p1 < ../kernel_patches/xxksu/scope_minimized_manual_hooks_v2_1_for_android14_6_1_2026_03_r11.patch
+          patch -p1 < ../.github/patches/dirty_allow_vendor_module_crcs.patch
+          
       - name: Inject Configuration
         working-directory: common
         run: |
