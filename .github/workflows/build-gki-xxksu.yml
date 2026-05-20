@@ -61,7 +61,7 @@ jobs:
           echo "ARM32_TOOLCHAIN=$HOME/toolchains/$TC_DIR/bin/arm-none-eabi-" >> $GITHUB_ENV
       - name: Clone Source
         run: |
-          aria2c -s16 -x16 -k1M https://android.googlesource.com/kernel/common/+archive/85a3b1c62eafe7162de570b1b5629a6bb654010d.tar.gz -o common.tar.gz
+          aria2c -s16 -x16 -k1M https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-release/common-85a3b1c62eafe7162de570b1b5629a6bb654010d.tar.gz -o common.tar.gz
           mkdir common
           tar -xzf common.tar.gz -C common
           git clone --depth=1 $ANYKERNEL_REPO -b gki-2.0 AK3
