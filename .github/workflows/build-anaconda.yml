@@ -52,7 +52,6 @@ jobs:
             "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
             "../kernel_patches/sultan/61_scripts_setlocalversion.patch"
             "../kernel_patches/sultan/62_init_Makefile.patch"
-            "../kernel_patches/sultan/selinux_hide-v2.patch"
             
           )
           for p in "${PATCHES[@]}"; do
