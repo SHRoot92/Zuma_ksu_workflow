@@ -25,6 +25,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install Host Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential libelf-dev libssl-dev libbpf-dev
+          
       - name: Download and setup Clang 
         run: |
           mkdir -p $HOME/clang
