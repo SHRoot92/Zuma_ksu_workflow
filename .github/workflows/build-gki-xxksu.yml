@@ -38,7 +38,7 @@ jobs:
       - name: Clone source and dependencies
         run: |
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r13.tar.gz" -o common.tar.gz
-          mkdir -p sultan_tag && tar -xzf common.tar.gz -C sultan && rm common.tar.gz
+          mkdir -p sultan && tar -xzf common.tar.gz -C sultan && rm common.tar.gz
           git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b gki-2.0 AK3
           git clone --depth=1 "${{ env.PATCHES_REPO }}" -b dev kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
