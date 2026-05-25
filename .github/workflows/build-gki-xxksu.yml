@@ -28,7 +28,7 @@ jobs:
       - name: Install Host Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential libelf-dev libssl-dev libbpf-dev
+          sudo apt-get install -y bc build-essential libelf-dev libssl-dev libbpf-dev pahole
           
       - name: Download and setup Clang 
         run: |
