@@ -117,9 +117,9 @@ jobs:
           cat <<EOF >> "$DEFCONFIG"
           # KernelSU Core (Source Integrated)
           CONFIG_KSU=y
-          # CONFIG_KSU_KPROBES_HOOK is not set
-          # CONFIG_KSU_DEBUG is not set
-          # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
+          CONFIG_KSU_EXTRAS=y
+          CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
+          CONFIG_KSU_LSM_SECURITY_HOOKS=y
 
           # Networking & System Pillars
           CONFIG_NETFILTER_ADVANCED=y
