@@ -34,30 +34,31 @@ jobs:
         run: |
           mkdir -p $HOME/clang
           cd $HOME/clang
-         
-          # Download Clang from ZyCromerZ
-          #wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+          
+          # Download Clang 23 from ZyCromerZ
           wget https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz
           rm clang.tar.gz
-         
+          
           echo "CLANG_PATH=$HOME/clang/bin" >> $GITHUB_ENV
           echo "$HOME/clang/bin" >> $GITHUB_PATH
 
-      - name: Download ARM64 GNU Toolchain 14.3.rel1
+      - name: Download ARM64 GNU Toolchain
         run: |
           mkdir -p $HOME/toolchains
           cd $HOME/toolchains
-          wget -q https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz -O tc.tar.xz
+          # 动态引用顶层定义的 GCC_VERSION
+          wget -q "https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz" -O tc.tar.xz
           tar -xJf tc.tar.xz
           rm tc.tar.xz
           TC_DIR=$(ls -d arm-gnu-toolchain-*)
           echo "ARM64_TOOLCHAIN=$HOME/toolchains/$TC_DIR/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
 
-      - name: Download ARM32 GNU Toolchain 14.3.rel1
+      - name: Download ARM32 GNU Toolchain
         run: |
           cd $HOME/toolchains
-          wget -q https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz -O tc-arm.tar.xz
+          # 动态引用顶层定义的 GCC_VERSION
+          wget -q "https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-arm-none-eabi.tar.xz" -O tc-arm.tar.xz
           tar -xJf tc-arm.tar.xz
           rm tc-arm.tar.xz
           TC_DIR=$(ls -d arm-gnu-toolchain-*arm-none-eabi*)
@@ -93,7 +94,7 @@ jobs:
           chmod +x sh/get_ksuver.sh
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "integrated")
           
-          # 使用已定义的环境变量规避通配符匹配风险
+          # 读取真实安装的编译器版本号（去掉尾部的 rel1 等后缀，保留纯版本格式供 Release Notes 规范展示）
           G_VER=$("${{ env.ARM64_TOOLCHAIN }}gcc" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           
           echo "--- LOGGING METADATA ---"
@@ -273,13 +274,13 @@ jobs:
           gh release create "$TAG" artifacts/*.zip \
             --title "Kernel Build — $TAG" \
             --notes "
-            ### 🚀 Build Information
+            ### Build Information
             | Component | Details |
             | :--- | :--- |
             | **Kernel Base** | GKI ($S_TAG) |
             | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
             | **xxKSU Ver** | \`r$K_VER\` |
-            | **Compiler** | GCC $GCC_VER / Clang 22 |
+            | **Compiler** | GCC $GCC_VER / Clang 23 |
             
             ### 🛠️ Networking Features (Fortress)
             - **TCP Congestion:** BBR (v1) + FQ
