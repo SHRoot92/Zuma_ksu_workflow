@@ -94,7 +94,7 @@ jobs:
           chmod +x sh/get_ksuver.sh
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "integrated")
           
-          # 读取真实安装的编译器版本号（去掉尾部的 rel1 等后缀，保留纯版本格式供 Release Notes 规范展示）
+          # 读取真实安装的编译器版本号
           G_VER=$("${{ env.ARM64_TOOLCHAIN }}gcc" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           
           echo "--- LOGGING METADATA ---"
@@ -201,6 +201,10 @@ jobs:
           sed -i 's/CONFIG_TCP_CONG_HTCP=y/CONFIG_TCP_CONG_HTCP=n/' "$DEFCONFIG"
           echo "CONFIG_WERROR=n" >> "$DEFCONFIG"
 
+          # 绕过并放开 GKI KMI 接口限制，防止原厂 vendor 驱动模块因签名冲突而导致崩溃卡屏
+          echo "CONFIG_GKI_HACKS_ALLOW_KMI_SYMBOL_VIOLATION=y" >> "$DEFCONFIG"
+          echo "CONFIG_DISABLE_CONT_KMI_VIOLATION=y" >> "$DEFCONFIG"
+
       - name: Build Kernel (Production)
         working-directory: common
         run: |
@@ -221,12 +225,10 @@ jobs:
       - name: Package AnyKernel3
         id: package
         run: |
-          if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
-            cp common/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
-          else
-            cp common/out/arch/arm64/boot/Image AK3/Image
-          fi
-          #cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb
+          # 强制提取标准的未压缩内核 Image 进刷机包，不使用可能导致不引导的 Image.lz4
+          cp common/out/arch/arm64/boot/Image AK3/Image
+          
+          # 删除了错误的硬编码 dtb 生成路径，允许 AnyKernel3 在刷入时自动解压并保留手机的原厂 dtb
           
           S_TAG="${{ steps.meta.outputs.sultan_tag }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
