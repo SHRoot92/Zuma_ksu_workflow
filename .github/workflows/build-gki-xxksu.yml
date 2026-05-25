@@ -226,7 +226,7 @@ jobs:
           else
             cp common/out/arch/arm64/boot/Image AK3/Image
           fi
-          cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb
+          #cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb
           
           S_TAG="${{ steps.meta.outputs.sultan_tag }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
