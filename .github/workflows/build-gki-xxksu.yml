@@ -32,7 +32,7 @@ jobs:
          
           # Download Clang from ZyCromerZ
           #wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
-          wget https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz O clang.tar.gz
+          wget https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz
           rm clang.tar.gz
          
