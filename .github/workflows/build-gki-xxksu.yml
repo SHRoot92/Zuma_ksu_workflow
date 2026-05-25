@@ -12,7 +12,7 @@ env:
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_BRANCH: master
-  GCC_VERSION: "14.3.rel1"
+  GCC_VERSION: "14.2.rel1"
 
 jobs:
   build:
@@ -28,15 +28,15 @@ jobs:
       - name: Install Host Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential libelf-dev libssl-dev libbpf-dev pahole
-          
+          sudo apt-get install -y bc build-essential libelf-dev libssl-dev libbpf-dev dwarves
+
       - name: Download and setup Clang 
         run: |
           mkdir -p $HOME/clang
           cd $HOME/clang
          
           # Download Clang from ZyCromerZ
-          #wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+          wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
           wget https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz -O clang.tar.gz
           tar -xzf clang.tar.gz
           rm clang.tar.gz
@@ -65,14 +65,17 @@ jobs:
 
       - name: Clone source and dependencies
         run: |
+          # 内核源码严格解压到 github_workspace/common
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r13.tar.gz" -o common.tar.gz
-          mkdir -p sultan && tar -xzf common.tar.gz -C sultan && rm common.tar.gz
+          mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
+          
+          # 其余辅助仓库全部克隆到根目录 github_workspace 下，与 common 并列
           git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b gki-2.0 AK3
           git clone --depth=1 "${{ env.PATCHES_REPO }}" -b dev kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
       - name: Apply build-reproducibility patches
-        working-directory: sultan
+        working-directory: common
         run: |
           PATCHES=(
             "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
@@ -86,12 +89,12 @@ jobs:
       - name: Collect build metadata
         id: meta
         run: |
-          S_TAG=$(git -C sultan rev-parse --short HEAD)
+          S_TAG=$(git -C common rev-parse --short HEAD)
           chmod +x sh/get_ksuver.sh
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "integrated")
           
-          # 修复提取 GCC 版本时的环境变量错误
-          G_VER=$($HOME/toolchains/arm-gnu-toolchain-*/bin/aarch64-none-linux-gnu-gcc --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          # 使用已定义的环境变量规避通配符匹配风险
+          G_VER=$("${{ env.ARM64_TOOLCHAIN }}gcc" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           
           echo "--- LOGGING METADATA ---"
           echo "ksu_version: $K_VER"
@@ -104,8 +107,9 @@ jobs:
           echo "gcc_ver=${G_VER}" >> "$GITHUB_OUTPUT"
 
       - name: Setup xxKSU
+        working-directory: common
         run: |
-          cd sultan
+          # 保持在 common 目录下，注入内核驱动树
           git clone --branch=master https://github.com/backslashxx/KernelSU.git KernelSU
           
           ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -113,18 +117,17 @@ jobs:
           grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
       - name: Setup atp4pixel Config Pillars
+        working-directory: common
         run: |
-          cd sultan
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
-          
           echo "" >> "$DEFCONFIG"
 
           cat <<EOF >> "$DEFCONFIG"
           # KernelSU Core (Source Integrated)
           CONFIG_KSU=y
-          CONFIG_KSU_EXTRAS=y
-          CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
-          CONFIG_KSU_LSM_SECURITY_HOOKS=y
+          # CONFIG_KSU_KPROBES_HOOK is not set
+          # CONFIG_KSU_DEBUG is not set
+          # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
 
           # Networking & System Pillars
           CONFIG_NETFILTER_ADVANCED=y
@@ -198,10 +201,10 @@ jobs:
           echo "CONFIG_WERROR=n" >> "$DEFCONFIG"
 
       - name: Build Kernel (Production)
-        working-directory: sultan
+        working-directory: common
         run: |
-          # 显式使用下载的 Clang22 和 GCC14 交叉工具链参数进行编译
           make O=out ARCH=arm64 gki_defconfig
+          make O=out ARCH=arm64 olddefconfig
           make O=out -j"$(nproc --all)" \
             ARCH=arm64 \
             CC=clang \
@@ -217,17 +220,16 @@ jobs:
       - name: Package AnyKernel3
         id: package
         run: |
-          if [ -f sultan/out/arch/arm64/boot/Image.lz4 ]; then
-            cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
+          if [ -f common/out/arch/arm64/boot/Image.lz4 ]; then
+            cp common/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           else
-            cp sultan/out/arch/arm64/boot/Image AK3/Image
+            cp common/out/arch/arm64/boot/Image AK3/Image
           fi
-          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
+          cat common/out/google-devices/gs201/dts/*.dtb > AK3/dtb
           
           S_TAG="${{ steps.meta.outputs.sultan_tag }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           
-          # 去除了 SUSFS 相关文件后缀命名
           ZIP_NAME="Sultan-gs201-${S_TAG}-xxKSU-r${K_VER}.zip"
           ( cd AK3 && zip -r9 "../${ZIP_NAME}" . -x "*.git*" )
           echo "ZIP_PATH=$GITHUB_WORKSPACE/${ZIP_NAME}" >> "$GITHUB_ENV"
