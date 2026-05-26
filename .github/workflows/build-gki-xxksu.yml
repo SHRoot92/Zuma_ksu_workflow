@@ -193,6 +193,7 @@ jobs:
           CONFIG_INOTIFY_USER=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_TMPFS_INODE64=y
+          CONFIG_MODULE_FORCE_LOAD=y
           EOF
 
           # Guardrails
@@ -200,6 +201,9 @@ jobs:
           sed -i 's/CONFIG_TCP_CONG_WESTWOOD=y/CONFIG_TCP_CONG_WESTWOOD=n/' "$DEFCONFIG"
           sed -i 's/CONFIG_TCP_CONG_HTCP=y/CONFIG_TCP_CONG_HTCP=n/' "$DEFCONFIG"
           echo "CONFIG_WERROR=n" >> "$DEFCONFIG"
+
+          
+
 
           
       - name: Build Kernel (Production)
