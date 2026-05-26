@@ -201,26 +201,25 @@ jobs:
           sed -i 's/CONFIG_TCP_CONG_HTCP=y/CONFIG_TCP_CONG_HTCP=n/' "$DEFCONFIG"
           echo "CONFIG_WERROR=n" >> "$DEFCONFIG"
 
-          # 绕过并放开 GKI KMI 接口限制，防止原厂 vendor 驱动模块因签名冲突而导致崩溃卡屏
-          echo "CONFIG_GKI_HACKS_ALLOW_KMI_SYMBOL_VIOLATION=y" >> "$DEFCONFIG"
-          echo "CONFIG_DISABLE_CONT_KMI_VIOLATION=y" >> "$DEFCONFIG"
-
+          
       - name: Build Kernel (Production)
         working-directory: common
         run: |
+          
+          
           make O=out ARCH=arm64 gki_defconfig
+          
           make O=out ARCH=arm64 olddefconfig
+          
+         
           make O=out -j"$(nproc --all)" \
             ARCH=arm64 \
-            CC=clang \
+            LLVM=1 \
+            LLVM_IAS=1 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
-            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
-            LD=ld.lld \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}"
+
 
       - name: Package AnyKernel3
         id: package
