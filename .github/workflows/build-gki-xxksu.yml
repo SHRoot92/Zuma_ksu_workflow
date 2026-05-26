@@ -66,8 +66,7 @@ jobs:
 
       - name: Clone source and dependencies
         run: |
-          # 内核源码严格解压到 github_workspace/common
-          aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r13.tar.gz" -o common.tar.gz
+          aria2c -s16 -x16 -k1M " https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-android14-6.1-2026-03_r13/common-android14-6.1-2026-03_r13.tar.gz" -o common.tar.gz
           mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
           
           # 其余辅助仓库全部克隆到根目录 github_workspace 下，与 common 并列
