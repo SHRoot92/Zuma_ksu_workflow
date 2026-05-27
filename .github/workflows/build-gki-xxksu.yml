@@ -174,9 +174,10 @@ jobs:
           echo "KERNEL_MAKE_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
           
           if [ -d ".git" ]; then
-            read -r K_HASH K_SHORT K_DATE K_MSG << EOF
-            $(git log -1 --format="%H %h %cd %s" --date=format:'%Y-%m-%d %H:%M:%S')
-            EOF
+            K_HASH=$(git log -1 --format="%H")
+            K_SHORT=$(git log -1 --format="%h")
+            K_DATE=$(git log -1 --format="%cd" --date=format:'%Y-%m-%d %H:%M:%S')
+            K_MSG=$(git log -1 --format="%s")
             echo "KERNEL_COMMIT_SHORT=$K_SHORT" >> $GITHUB_ENV
             echo "KERNEL_COMMIT_MSG=$K_MSG" >> $GITHUB_ENV
           else
@@ -211,9 +212,9 @@ jobs:
           KSU_COUNT=$(git rev-list --count HEAD)
           KSU_VERSION=$((KSU_COUNT + 30000))
           
-          read -r KSU_C_HASH KSU_C_SHORT KSU_C_DATE KSU_C_MSG KSU_C_AUTH << EOF
-          $(git log -1 --format="%H %h %cd %s %an" --date=format:'%Y-%m-%d %H:%M:%S')
-          EOF
+          KSU_C_SHORT=$(git log -1 --format="%h")
+          KSU_C_MSG=$(git log -1 --format="%s")
+          KSU_C_AUTH=$(git log -1 --format="%an")
           
           echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
           echo "KSU_COMMIT_SHORT=$KSU_C_SHORT" >> $GITHUB_ENV
@@ -224,7 +225,7 @@ jobs:
           mkdir -p changelogs
           CHANGELOG_FILE="changelogs/CHANGELOG-backslashxx.md"
           
-          cat << EOF > "$CHANGELOG_FILE"
+          cat > "$CHANGELOG_FILE" << EOF
           # Kernel Build Changelog
           
           **Variant:** backslashxx (KernelSU)
@@ -279,7 +280,6 @@ jobs:
           - Full cgroup support (BPF, PIDS, Freezer, SCHED)
           - Inotify user support
           
-          ---
           EOF
           
           echo "CHANGELOG_FILE=$CHANGELOG_FILE" >> $GITHUB_ENV
@@ -294,7 +294,7 @@ jobs:
           
           sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion 2>/dev/null || true
           
-          sed -i 's/next_path = strchr(s, '"'"':'"'"');/next_path = (char *)strchr(s, '"'"':'"'"');/' tools/lib/bpf/libbpf.c 2>/dev/null || true
+          sed -i 's/next_path = strchr(s, ":")/next_path = (char *)strchr(s, ":")/' tools/lib/bpf/libbpf.c 2>/dev/null || true
       - name: Inject Configuration (Fortress Deep Unlock)
         working-directory: kernel
         run: |
@@ -306,7 +306,7 @@ jobs:
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
           
           # Append Fortress Deep Unlock configurations
-          cat >> out/.config <<'EOF'
+          cat >> out/.config << 'EOF'
           # --- Core System & FS ---
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
