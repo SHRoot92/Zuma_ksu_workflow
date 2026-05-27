@@ -237,7 +237,7 @@ jobs:
           S_TAG="${{ steps.meta.outputs.sultan_tag }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           
-          ZIP_NAME="Sultan-gs201-${S_TAG}-xxKSU-r${K_VER}.zip"
+          ZIP_NAME="GKI-gs201-${S_TAG}-xxKSU-r${K_VER}.zip"
           ( cd AK3 && zip -r9 "../${ZIP_NAME}" . -x "*.git*" )
           echo "ZIP_PATH=$GITHUB_WORKSPACE/${ZIP_NAME}" >> "$GITHUB_ENV"
 
