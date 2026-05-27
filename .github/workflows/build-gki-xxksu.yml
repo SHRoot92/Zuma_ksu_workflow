@@ -23,7 +23,7 @@ jobs:
       gcc_ver: ${{ steps.meta.outputs.gcc_ver }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Host Build Dependencies
         run: |
@@ -114,7 +114,6 @@ jobs:
         run: |
           DEFCONFIG="arch/arm64/configs/gki_defconfig"
           
-          # 先移除可能冲突的已有 KSU 配置
           sed -i '/^CONFIG_KSU=/d' "$DEFCONFIG"
           echo "" >> "$DEFCONFIG"
 
@@ -123,7 +122,7 @@ jobs:
           CONFIG_LOCALVERSION=""
           CONFIG_LOCALVERSION_AUTO=n
 
-          # 强制关闭模块符号版本与签名校验（允许加载原厂 vendor 分区未签名的驱动）
+          # 强制关闭模块符号版本与签名校验（允许加载原厂 vendor 分区驱动）
           CONFIG_MODVERSIONS=n
           CONFIG_MODULE_FORCE_LOAD=y
           CONFIG_MODULE_SIG=n
@@ -196,7 +195,6 @@ jobs:
           CONFIG_LTO_NONE=n
           EOF
 
-          # 清理传统拥塞控制算法
           sed -i 's/CONFIG_TCP_CONG_BIC=y/CONFIG_TCP_CONG_BIC=n/' "$DEFCONFIG"
           sed -i 's/CONFIG_TCP_CONG_WESTWOOD=y/CONFIG_TCP_CONG_WESTWOOD=n/' "$DEFCONFIG"
           echo "CONFIG_WERROR=n" >> "$DEFCONFIG"
@@ -204,7 +202,6 @@ jobs:
       - name: Build Kernel (Production)
         working-directory: common
         run: |
-          # 显式导出完整的 LLVM/Clang 工具链环境变量
           export CC="clang"
           export LD="ld.lld"
           export AR="llvm-ar"
@@ -217,20 +214,20 @@ jobs:
           # 1. 释放基础配置
           make O=out ARCH=arm64 gki_defconfig
           
-          # 2. 检查、对齐并合并附加的 Kconfig 参数
+          # 2. 检查并合并配置参数
           make O=out ARCH=arm64 olddefconfig
           
-          # 3. 严格断言校验（避免编译出卡引导的坏包）
+          # 3. 严格断言校验
           if ! grep -q '^CONFIG_KSU=y' out/.config; then
             echo "::error::CONFIG_KSU 未能在同步配置后存活！"
             exit 1
           fi
           if ! grep -q '^CONFIG_DEBUG_INFO_BTF=y' out/.config; then
-            echo "::error::CONFIG_DEBUG_INFO_BTF 未生效！Android 14 的 bpfloader 将会循环报错导致 bootloop。"
+            echo "::error::CONFIG_DEBUG_INFO_BTF 未生效！"
             exit 1
           fi
           
-          # 4. 执行全核并行编译
+          # 4. 执行多线程编译
           make O=out -j"$(nproc --all)" \
             ARCH=arm64 \
             LLVM=1 \
@@ -253,7 +250,7 @@ jobs:
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload kernel ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gs201-kernel
           path: ${{ env.ZIP_PATH }}
@@ -264,14 +261,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
-          name: gs201-kernel
           path: ./artifacts
+          merge-multiple: true
 
       - name: Tag and Release
         env:
