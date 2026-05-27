@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KernelSU for Pixel 7 Series (backslashxx)
+name: Build GKI Kernel with xxKSU
 
 on:
   workflow_dispatch:
@@ -138,7 +138,7 @@ jobs:
       - name: Pre-Clean Build Artifacts
         run: |
           echo "🧹 Cleaning previous build artifacts..."
-          rm -rf AnyKernel3 release-assets changelogs || true
+          rm -rf AnyKernel3 release-assets changelogs kernel_patches || true
       - name: Checkout Workflow Repo
         uses: actions/checkout@v4
         with:
@@ -163,6 +163,10 @@ jobs:
             echo "❌ Error: Makefile not found in kernel directory!"
             exit 1
           fi
+      - name: Clone Kernel Patches Repository
+        run: |
+          echo "📥 Cloning kernel patches repository..."
+          git clone --depth=1 https://github.com/yapixel/kernel_patches.git
       - name: Store Kernel Version Info
         run: |
           cd kernel
@@ -216,6 +220,36 @@ jobs:
           echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
           echo "KSU_COMMIT_SHORT=$KSU_C_SHORT" >> $GITHUB_ENV
           echo "KSU_COMMIT_MSG=$KSU_C_MSG" >> $GITHUB_ENV
+      - name: Apply Sultan Patches
+        run: |
+          cd kernel
+          echo "🔧 Applying Sultan patches from kernel_patches repo..."
+          
+          # 检查补丁文件是否存在
+          if [ ! -f "../kernel_patches/sultan/60_scripts_mkcompile_h.patch" ]; then
+            echo "❌ Error: 60_scripts_mkcompile_h.patch not found!"
+            exit 1
+          fi
+          if [ ! -f "../kernel_patches/sultan/61_scripts_setlocalversion.patch" ]; then
+            echo "❌ Error: 61_scripts_setlocalversion.patch not found!"
+            exit 1
+          fi
+          if [ ! -f "../kernel_patches/sultan/62_init_Makefile.patch" ]; then
+            echo "❌ Error: 62_init_Makefile.patch not found!"
+            exit 1
+          fi
+          
+          # 应用补丁
+          echo "Applying 60_scripts_mkcompile_h.patch..."
+          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch || { echo "❌ Failed to apply 60_scripts_mkcompile_h.patch"; exit 1; }
+          
+          echo "Applying 61_scripts_setlocalversion.patch..."
+          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch || { echo "❌ Failed to apply 61_scripts_setlocalversion.patch"; exit 1; }
+          
+          echo "Applying 62_init_Makefile.patch..."
+          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || { echo "❌ Failed to apply 62_init_Makefile.patch"; exit 1; }
+          
+          echo "✅ All Sultan patches applied successfully!"
       - name: Generate Changelog
         if: needs.setup.outputs.create_release == 'true'
         run: |
@@ -237,6 +271,12 @@ jobs:
           |-----------|---------------|---------|
           | **KernelSU** | \`${{ env.KSU_COMMIT_SHORT }}\` | ${{ env.KSU_COMMIT_MSG }} |
           | **Kernel** | ${{ env.KERNEL_VERSION }} | ${{ env.KERNEL_COMMIT_MSG }} |
+          
+          ---
+          ## Applied Patches
+          - Sultan: 60_scripts_mkcompile_h.patch
+          - Sultan: 61_scripts_setlocalversion.patch
+          - Sultan: 62_init_Makefile.patch
           
           ---
           ## Fortress Deep Unlock - Configuration Pillars
@@ -412,8 +452,6 @@ jobs:
           CONFIG_LTO_CLANG_FULL=n
           CONFIG_LTO_NONE=n
           CONFIG_WERROR=n
-          CONFIG_LOCALVERSION="-pixel7"
-          CONFIG_LOCALVERSION_AUTO=n
           CONFIG_MODVERSIONS=n
           CONFIG_MODULE_FORCE_LOAD=y
           CONFIG_MODULE_SIG=n
@@ -515,6 +553,7 @@ jobs:
           **KernelSU:** backslashxx (master branch)
           **Kernel Source:** android14-6.1-2026-03_r13 (pre-built archive)
           **AnyKernel3:** WildKernels/AnyKernel3 (gki-2.0 branch)
+          **Applied Patches:** Sultan (mkcompile_h, setlocalversion, init Makefile)
           
           ### 🏰 Fortress Deep Unlock - Feature Pillars
           
