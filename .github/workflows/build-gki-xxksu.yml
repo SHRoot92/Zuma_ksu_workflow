@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KernelSU (backslashxx)
+name: Build GKI Kernel with KernelSU for Pixel 7 Series (backslashxx)
 
 on:
   workflow_dispatch:
@@ -95,10 +95,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-backslashxx-${{ github.ref_name }}-${{ github.run_id }}
+          key: ccache-backslashxx-pixel7-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            ccache-backslashxx-${{ github.ref_name }}-
-            ccache-backslashxx-
+            ccache-backslashxx-pixel7-${{ github.ref_name }}-
+            ccache-backslashxx-pixel7-
       - name: Configure ccache
         run: |
           ccache --max-size=5G
@@ -145,7 +145,7 @@ jobs:
           clean: false
       - name: Download and Extract Kernel Source
         run: |
-          echo "📦 Downloading kernel source from pre-built archive..."
+          echo "📦 Downloading kernel source for Pixel 7 from pre-built archive..."
           rm -rf kernel
           
           wget -q --show-progress \
@@ -174,9 +174,7 @@ jobs:
           echo "KERNEL_MAKE_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
           
           if [ -d ".git" ]; then
-            K_HASH=$(git log -1 --format="%H")
             K_SHORT=$(git log -1 --format="%h")
-            K_DATE=$(git log -1 --format="%cd" --date=format:'%Y-%m-%d %H:%M:%S')
             K_MSG=$(git log -1 --format="%s")
             echo "KERNEL_COMMIT_SHORT=$K_SHORT" >> $GITHUB_ENV
             echo "KERNEL_COMMIT_MSG=$K_MSG" >> $GITHUB_ENV
@@ -214,7 +212,6 @@ jobs:
           
           KSU_C_SHORT=$(git log -1 --format="%h")
           KSU_C_MSG=$(git log -1 --format="%s")
-          KSU_C_AUTH=$(git log -1 --format="%an")
           
           echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
           echo "KSU_COMMIT_SHORT=$KSU_C_SHORT" >> $GITHUB_ENV
@@ -223,11 +220,12 @@ jobs:
         if: needs.setup.outputs.create_release == 'true'
         run: |
           mkdir -p changelogs
-          CHANGELOG_FILE="changelogs/CHANGELOG-backslashxx.md"
+          CHANGELOG_FILE="changelogs/CHANGELOG-backslashxx-pixel7.md"
           
           cat > "$CHANGELOG_FILE" << EOF
-          # Kernel Build Changelog
+          # Kernel Build Changelog - Pixel 7 Series
           
+          **Device:** Pixel 7, 7 Pro, 7a
           **Variant:** backslashxx (KernelSU)
           **Build Number:** #${{ github.run_number }}
           **KernelSU Version:** r${{ env.KSU_VERSION }}
@@ -295,7 +293,7 @@ jobs:
           sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion 2>/dev/null || true
           
           sed -i 's/next_path = strchr(s, ":")/next_path = (char *)strchr(s, ":")/' tools/lib/bpf/libbpf.c 2>/dev/null || true
-      - name: Inject Configuration (Fortress Deep Unlock)
+      - name: Inject Configuration (Fortress Deep Unlock) for Pixel 7
         working-directory: kernel
         run: |
           export ARCH=arm64
@@ -305,12 +303,23 @@ jobs:
           # Generate base config
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
           
-          # Append Fortress Deep Unlock configurations
+          # Append Fortress Deep Unlock configurations for Pixel 7
           cat >> out/.config << 'EOF'
           # --- Core System & FS ---
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_LOG_BUF_SHIFT=21
+          
+          # --- Pixel 7 Tensor G2 Optimizations ---
+          CONFIG_ARM64_CORTEX_X1=y
+          CONFIG_ARM64_CORTEX_A78=y
+          CONFIG_ARM64_CORTEX_A55=y
+          CONFIG_ARM64_VA_BITS=48
+          CONFIG_ARM64_PA_BITS=48
+          CONFIG_SCHED_MC=y
+          CONFIG_SCHED_CORE=y
+          CONFIG_ENERGY_MODEL=y
+          CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
           
           # --- Pillar 1: atp4pixel / Advanced Networking ---
           CONFIG_NETFILTER_ADVANCED=y
@@ -403,7 +412,7 @@ jobs:
           CONFIG_LTO_CLANG_FULL=n
           CONFIG_LTO_NONE=n
           CONFIG_WERROR=n
-          CONFIG_LOCALVERSION=""
+          CONFIG_LOCALVERSION="-pixel7"
           CONFIG_LOCALVERSION_AUTO=n
           CONFIG_MODVERSIONS=n
           CONFIG_MODULE_FORCE_LOAD=y
@@ -416,7 +425,7 @@ jobs:
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
           
           # Verify critical configs
-          echo "🔍 Verifying Fortress Deep Unlock configuration..."
+          echo "🔍 Verifying Fortress Deep Unlock configuration for Pixel 7..."
           grep -E "CONFIG_KSU|CONFIG_IP_SET|CONFIG_TCP_CONG_BBR|CONFIG_XFRM_USER" out/.config || true
       - name: Build Kernel
         run: |
@@ -449,19 +458,25 @@ jobs:
           
           echo "BUILD_TIME=$((SECONDS - START_TIME))s" >> $GITHUB_ENV
       - name: Package Kernel (AnyKernel3)
+        # 使用 WildKernels 的 AnyKernel3 仓库的 gki-2.0 分支
         run: |
           cd kernel
           KERNEL_VERSION=$(grep "^VERSION" Makefile | cut -d' ' -f3).$(grep "^PATCHLEVEL" Makefile | cut -d' ' -f3).$(grep "^SUBLEVEL" Makefile | cut -d' ' -f3)
           cd ..
           
-          git clone --depth=1 --branch=KernelSU https://github.com/deepongi-labs/AnyKernel3-p8a AnyKernel3 || \
-          git clone --depth=1 --branch=main https://github.com/deepongi-labs/AnyKernel3-p8a AnyKernel3
+          # 克隆 WildKernels 的 gki-2.0 分支
+          echo "📦 Cloning AnyKernel3 from WildKernels (gki-2.0 branch)..."
+          git clone --depth=1 --branch=gki-2.0 https://github.com/WildKernels/AnyKernel3.git AnyKernel3
           
+          # 复制内核镜像
           cp kernel/out/arch/arm64/boot/Image AnyKernel3/
+          # 如果存在 dtb 也复制
           [ -f kernel/out/arch/arm64/boot/dtb ] && cp kernel/out/arch/arm64/boot/dtb AnyKernel3/
           
-          cd AnyKernel3 && rm -rf .git .github
-          ZIP_NAME="AK3-${KERNEL_VERSION}-backslashxx-r${{ env.KSU_VERSION }}.zip"
+          # 打包
+          cd AnyKernel3
+          rm -rf .git .github
+          ZIP_NAME="AK3-Pixel7-${KERNEL_VERSION}-backslashxx-r${{ env.KSU_VERSION }}.zip"
           zip -r9 "../$ZIP_NAME" .
           cd ..
           
@@ -469,7 +484,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-backslashxx-${{ github.run_number }}
+          name: kernel-backslashxx-pixel7-${{ github.run_number }}
           path: |
             ${{ env.KERNEL_ZIP }}
             ${{ env.CHANGELOG_FILE }}
@@ -485,7 +500,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-      - name: Create GitHub Release
+      - name: Create GitHub Release for Pixel 7
         run: |
           cd release-assets
           find . -type f -exec mv {} . \; 2>/dev/null || true
@@ -496,10 +511,17 @@ jobs:
           fi
           
           RELEASE_NOTES="**Build Date:** $(date)
+          **Device:** Pixel 7, Pixel 7 Pro, Pixel 7a
           **KernelSU:** backslashxx (master branch)
           **Kernel Source:** android14-6.1-2026-03_r13 (pre-built archive)
+          **AnyKernel3:** WildKernels/AnyKernel3 (gki-2.0 branch)
           
           ### 🏰 Fortress Deep Unlock - Feature Pillars
+          
+          **Tensor G2 Optimizations**
+          - Cortex-X1, A78, A55 CPU optimizations
+          - 48-bit VA/PA support
+          - Energy Model and Schedutil governor
           
           **Pillar 1 - Advanced Networking (atp4pixel)**
           - Netfilter with TPROXY/REDIRECT support
@@ -529,12 +551,14 @@ jobs:
           - ThinLTO optimizations
           
           ### Supported Devices
-          - Pixel 8, 8a, 8 Pro
+          - Pixel 7 (cheetah)
+          - Pixel 7 Pro (panther)
+          - Pixel 7a (lynx)
           
           Flash ZIP in Kernel Flasher or extract Image to patch boot.img manually."
           
-          gh release create "build-${{ github.run_number }}" \
-            --title "Fortress Deep Unlock Kernel #${{ github.run_number }} (backslashxx)" \
+          gh release create "build-pixel7-${{ github.run_number }}" \
+            --title "Fortress Deep Unlock Kernel for Pixel 7 #${{ github.run_number }} (backslashxx)" \
             --notes "$RELEASE_NOTES" \
             --repo "${{ github.repository }}" \
             ./*.zip
