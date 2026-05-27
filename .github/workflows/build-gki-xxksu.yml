@@ -195,6 +195,9 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_TMPFS_INODE64=y
           CONFIG_MODULE_FORCE_LOAD=y
+          CONFIG_LTO_CLANG_THIN=y
+          CONFIG_LTO_CLANG_FULL=n
+          CONFIG_LTO_NONE=n
           EOF
 
           # Guardrails
