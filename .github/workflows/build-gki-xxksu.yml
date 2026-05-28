@@ -265,10 +265,10 @@ jobs:
           ---
           ## Component Versions
 
-| Component | Version/Commit | Summary |
-| :--- | :--- | :--- |
-| **KernelSU** | \`${{ env.KSU_COMMIT_SHORT }}\` | ${{ env.KSU_COMMIT_MSG }} |
-| **Kernel** | ${{ env.KERNEL_VERSION }} | ${{ env.KERNEL_COMMIT_MSG }} |
+          | Component | Version/Commit | Summary |
+          | :--- | :--- | :--- |
+          | **KernelSU** | \`${{ env.KSU_COMMIT_SHORT }}\` | ${{ env.KSU_COMMIT_MSG }} |
+          | **Kernel** | ${{ env.KERNEL_VERSION }} | ${{ env.KERNEL_COMMIT_MSG }} |
 
           ---
           ## Applied Patches
