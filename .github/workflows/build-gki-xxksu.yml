@@ -443,6 +443,9 @@ jobs:
           CONFIG_CGROUP_PIDS=y
           CONFIG_CGROUP_FREEZER=y
           CONFIG_INOTIFY_USER=y
+
+          CONFIG_LOCALVERSION=""
+          CONFIG_LOCALVERSION_AUTO=y
           
           # --- Additional Optimizations ---
           CONFIG_DEBUG_INFO=y
