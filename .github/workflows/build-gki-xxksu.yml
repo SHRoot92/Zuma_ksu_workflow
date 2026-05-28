@@ -330,7 +330,7 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/infectedmushi/kernel_patches/main/fix-clidr-uninitialized.patch" -o /tmp/fix-clidr.patch
           patch -p1 --forward < /tmp/fix-clidr.patch 2>/dev/null || true
           
-          sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion 2>/dev/null || true
+          #sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion 2>/dev/null || true
           
           sed -i 's/next_path = strchr(s, ":")/next_path = (char *)strchr(s, ":")/' tools/lib/bpf/libbpf.c 2>/dev/null || true
       - name: Inject Configuration (Fortress Deep Unlock) for Pixel 7
