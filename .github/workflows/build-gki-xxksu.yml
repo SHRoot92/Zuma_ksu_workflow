@@ -96,7 +96,6 @@ jobs:
             ccache-backslashxx-pixel7-
       - name: Configure ccache
         run: |
-          mkdir -p ${{ env.CCACHE_DIR }}
           ccache --max-size=5G
           ccache --set-config=compression=true
           ccache --set-config=compression_level=1
@@ -162,11 +161,6 @@ jobs:
         run: |
           echo "Cloning kernel patches repository..."
           git clone --depth=1 https://github.com/yapixel/kernel_patches.git
-      - name: Setup Compilation Environment and Error Traps
-        run: |
-          echo "Setting build environment constants..."
-          echo "KBUILD_BUILD_USER=debiansid" >> $GITHUB_ENV
-          echo "KBUILD_BUILD_HOST=Fortress-Builder" >> $GITHUB_ENV
       - name: Store Kernel Version Info
         run: |
           cd kernel
@@ -218,11 +212,9 @@ jobs:
           echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
           echo "KSU_COMMIT_SHORT=$KSU_C_SHORT" >> $GITHUB_ENV
           echo "KSU_COMMIT_MSG=$KSU_C_MSG" >> $GITHUB_ENV
-      - name: Apply Sultan Patches与异常捕获
+      - name: Apply Sultan Patches
         run: |
           cd kernel
-          trap 'echo "Error encountered at line $LINENO during Sultan patch application!"' ERR
-          
           if [ ! -f "../kernel_patches/sultan/60_scripts_mkcompile_h.patch" ] || \
              [ ! -f "../kernel_patches/sultan/61_scripts_setlocalversion.patch" ] || \
              [ ! -f "../kernel_patches/sultan/62_init_Makefile.patch" ]; then
@@ -236,7 +228,6 @@ jobs:
       - name: Apply Vendor Module CRC Patch
         run: |
           cd kernel
-          trap 'echo "Error at line $LINENO applying CRC patch!"' ERR
           if [ -f "../kernel_patches/cheetah/dirty_allow_vendor_module_crcs.patch" ]; then
             patch -p1 < ../kernel_patches/cheetah/dirty_allow_vendor_module_crcs.patch || exit 1
           elif [ -f "../kernel_patches/dirty_allow_vendor_module_crcs.patch" ]; then
@@ -265,10 +256,10 @@ jobs:
           ---
           ## Component Versions
 
-          | Component | Version/Commit | Summary |
-          | :--- | :--- | :--- |
-          | **KernelSU** | \`${{ env.KSU_COMMIT_SHORT }}\` | ${{ env.KSU_COMMIT_MSG }} |
-          | **Kernel** | ${{ env.KERNEL_VERSION }} | ${{ env.KERNEL_COMMIT_MSG }} |
+        | Component | Version/Commit | Summary |
+        | :--- | :--- | :--- |
+        | **KernelSU** | \`${{ env.KSU_COMMIT_SHORT }}\` | ${{ env.KSU_COMMIT_MSG }} |
+        | **Kernel** | ${{ env.KERNEL_VERSION }} | ${{ env.KERNEL_COMMIT_MSG }} |
 
           ---
           ## Applied Patches
@@ -357,8 +348,7 @@ jobs:
           CONFIG_ENERGY_MODEL=y
           CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
           
-          # --- Version Settings for Sultan Patch & Localversion Overrides ---
-          CONFIG_LOCALVERSION="-Fortress-DeepUnlock"
+          
           CONFIG_LOCALVERSION_AUTO=n
           
           # --- Pillar 1: atp4pixel / Advanced Networking ---
@@ -459,27 +449,30 @@ jobs:
           CONFIG_MODULE_SIG_ALL=n
           EOF
           
+          # 像素级同步参考脚本：直接用 sed 物理干掉 setlocalversion 脚本中的加号自动追加
           sed -i 's/echo "+"/# echo "+"/g' scripts/setlocalversion
           
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
           
-          if grep -q "CONFIG_KSU" out/.config && ! grep -q "CONFIG_KSU=y" out/.config; then
-            echo "Error: Config dependency validation failed! KSU defined but not enabled."
+          # 安全校验层：检查 KSU 强开是否在中途被冲突底层剔除
+          if ! grep -q "CONFIG_KSU=y" out/.config; then
+            echo "Error: KSU setup mismatch in final configuration!"
             exit 1
           fi
           grep -E "CONFIG_KSU|CONFIG_IP_SET|CONFIG_TCP_CONG_BBR|CONFIG_XFRM_USER|CONFIG_LOCALVERSION" out/.config || true
       - name: Build Kernel
         run: |
           cd kernel
+          
+          # 完全同步参考脚本的环境变量与全局 KCFLAGS 策略
           export ARCH=arm64
           export CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}"
           export CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}"
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CC="ccache clang"
           export CXX="ccache clang++"
-          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-          export KCFLAGS="-w -fno-stack-protector"
+          
+          export KCFLAGS="-w"
           
           MAKE_JOBS=$(nproc)
           
@@ -488,7 +481,8 @@ jobs:
           fi
           
           make -j$MAKE_JOBS \
-            LLVM=1 LLVM_IAS=1 \
+            LLVM=1 \
+            LLVM_IAS=1 \
             ARCH=arm64 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
@@ -511,7 +505,7 @@ jobs:
           
           cd AnyKernel3
           rm -rf .git .github
-          ZIP_NAME="AK3-Pixel7-${KERNEL_VERSION}-backslashxx-r${{ env.KSU_VERSION }}.zip"
+          ZIP_NAME="AK3-gs201-${KERNEL_VERSION}-xxksu-r${{ env.KSU_VERSION }}.zip"
           zip -r9 "../$ZIP_NAME" .
           cd ..
           
