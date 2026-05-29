@@ -174,7 +174,7 @@ jobs:
         working-directory: sultan
         run: |
           echo "Running sed commands..."
-          sed -i '/CONFIG_LOCALVERSION/s/-Sultan//' ./arch/arm64/configs/${{ inputs.codename }}_defconfig
+          sed -i '/CONFIG_LOCALVERSION/s/-Sultan//' ./arch/arm64/configs/gs201_defconfig
 
           sed -i '/echo "+"$/d' scripts/setlocalversion
 
