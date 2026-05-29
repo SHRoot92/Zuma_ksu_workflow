@@ -81,6 +81,10 @@ jobs:
           CROSS_COMPILE: ${{ env.GCC_PATH }}
           CC: ${{ env.GCC_PATH }}gcc
         run: |
+
+          sed -i '/CONFIG_LOCALVERSION/s/-Sultan/-android13-4-00003-g776d0a76f6aa-ab10208116/' ./arch/arm64/configs/gs201_defconfig
+
+          sed -i '/echo "+"$/d' scripts/setlocalversion
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
           
           cat >> out/.config <<EOF
@@ -169,14 +173,6 @@ jobs:
           EOF
           
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig
-
-      - name: Run sed and perl Commands
-        working-directory: sultan
-        run: |
-          echo "Running sed commands..."
-          sed -i '/CONFIG_LOCALVERSION/s/-Sultan//' ./arch/arm64/configs/gs201_defconfig
-
-          sed -i '/echo "+"$/d' scripts/setlocalversion
 
 
       - name: Build Kernel (Production)
