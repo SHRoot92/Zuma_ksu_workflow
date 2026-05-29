@@ -56,8 +56,8 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSU_BRANCH }}"
           #patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
-          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
-          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          #patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
+          #patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
 
           
 
@@ -194,7 +194,7 @@ jobs:
         run: |
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           #cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-          ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-xxKSU-r${{ steps.meta.outputs.ksu_ver }}.zip"
+          ZIP_NAME="Sultan-gs201-$S_TAG-xxKSU-r${{ steps.meta.outputs.ksu_ver }}.zip"
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
 
