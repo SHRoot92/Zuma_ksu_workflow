@@ -175,6 +175,7 @@ jobs:
         env:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
+          KBUILD_BUILD_TIMESTAMP: "Thu May 25 12:11:12 UTC 2023"
           CROSS_COMPILE: ${{ env.GCC_PATH }}
           CC: ${{ env.GCC_PATH }}gcc
         run: |
