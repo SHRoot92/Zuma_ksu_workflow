@@ -1,4 +1,4 @@
-name: Build Sultan 13.0.0 + xxKSU
+name: Build Sultan A13 + xxKSU
 
 on:
   workflow_dispatch:
