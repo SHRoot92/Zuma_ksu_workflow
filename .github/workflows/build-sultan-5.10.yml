@@ -170,6 +170,15 @@ jobs:
           
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig
 
+      - name: Run sed and perl Commands
+        working-directory: sultan
+        run: |
+          echo "Running sed commands..."
+          sed -i '/CONFIG_LOCALVERSION/s/-Sultan//' ./arch/arm64/configs/${{ inputs.codename }}_defconfig
+
+          sed -i '/echo "+"$/d' scripts/setlocalversion
+
+
       - name: Build Kernel (Production)
         working-directory: sultan
         env:
