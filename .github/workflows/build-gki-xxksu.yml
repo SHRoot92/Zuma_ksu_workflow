@@ -442,7 +442,7 @@ jobs:
           CONFIG_LTO_CLANG_FULL=n
           CONFIG_LTO_NONE=n
           CONFIG_WERROR=n
-          CONFIG_MODVERSIONS=n
+          CONFIG_MODVERSIONS=y
           CONFIG_MODULE_FORCE_LOAD=y
           CONFIG_MODULE_SIG=n
           CONFIG_MODULE_SIG_FORCE=n
