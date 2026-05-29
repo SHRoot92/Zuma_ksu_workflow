@@ -190,7 +190,7 @@ jobs:
         run: |
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           #cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-          ZIP_NAME="Sultan-kernel-gs201-A13-${{ steps.meta.outputs.s_tag }}-xxKSU-r${{ steps.meta.outputs.ksu_ver }}.zip"
+          ZIP_NAME="Sultan-kernel-gs201-A13-${{ steps.meta.outputs.s_tag }}-xxKSU+${{ steps.meta.outputs.ksu_ver }}.zip"
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
 
