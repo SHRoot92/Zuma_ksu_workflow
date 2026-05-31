@@ -189,8 +189,7 @@ jobs:
           cd kernel
           rm -rf KernelSU drivers/kernelsu
           
-          # FIX: use main branch (stable), not staging (experimental)
-          git clone --depth=1 --branch=main https://github.com/backslashxx/KernelSU.git KernelSU
+          git clone --depth=1 --branch=master https://github.com/backslashxx/KernelSU.git KernelSU
           
           ln -sf ../KernelSU/kernel drivers/kernelsu
           
@@ -199,7 +198,7 @@ jobs:
           
           echo "KSU_REPO=backslashxx/KernelSU" >> $GITHUB_ENV
           # FIX: match actual cloned branch
-          echo "KSU_BRANCH=main" >> $GITHUB_ENV
+          echo "KSU_BRANCH=master" >> $GITHUB_ENV
       - name: Get KSU Version Info
         run: |
           cd kernel/KernelSU
