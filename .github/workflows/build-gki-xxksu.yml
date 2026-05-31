@@ -203,7 +203,7 @@ jobs:
           cd kernel_workspace/common
 
           echo "正在克隆 xxKSU..."
-          git clone --depth=1 --branch=main https://github.com/backslashxx/KernelSU.git KernelSU
+          git clone --depth=1 --branch=master https://github.com/backslashxx/KernelSU.git KernelSU
 
           cd KernelSU
 
