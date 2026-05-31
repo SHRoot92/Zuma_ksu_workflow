@@ -121,7 +121,8 @@ jobs:
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
-          echo "CONFIG_KSU=y" >> "$"$DEFCONFIG"
+          # 修复点：移除了错误的双引号与多余的 $ 符号
+          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
           echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG"
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$DEFCONFIG"
@@ -166,8 +167,6 @@ jobs:
 
           chmod 777 ./*.so
 
-          # 自动转换用户输入的时间戳为格式化的日期字符串，以便 libfaketime 识别
-          # 输入: "Fri Jan 9 16:33:46 UTC 2026" -> 转换输出: "2026-01-09 16:33:46"
           RAW_TIME="${{ env.BUILD_TIMESTAMP }}"
           FORMATTED_TIME=$(date -d "$RAW_TIME" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "2026-01-09 16:33:46")
 
