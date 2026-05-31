@@ -75,6 +75,7 @@ jobs:
             zstd \
             unzip \
             wget \
+            pahole \
             zip
 
           echo "正在安装 ccache..."
