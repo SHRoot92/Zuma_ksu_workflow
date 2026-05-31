@@ -132,17 +132,7 @@ jobs:
           TC_DIR=$(ls -d arm-gnu-toolchain-*arm-none-eabi*)
           echo "ARM32_TOOLCHAIN=$HOME/toolchains/$TC_DIR/bin/arm-none-eabi-" >> $GITHUB_ENV
           echo "ARM32 toolchain ready"
-      - name: Download build-tools
-        run: |
-          mkdir -p $HOME/build-tools
-          cd $HOME/build-tools
-          wget -q https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip -O build-tools.zip
-          unzip -q build-tools.zip
-          rm build-tools.zip
-          # Put build-tools/bin at the END of PATH so it doesn't override existing toolchains
-          echo "$HOME/build-tools/bin" >> $GITHUB_PATH
-          echo "BUILD_TOOLS_DIR=$HOME/build-tools" >> $GITHUB_ENV
-          echo "build-tools ready"
+     
       - name: Pre-Clean Build Artifacts
         run: |
           echo "Cleaning previous build artifacts..."
@@ -200,7 +190,6 @@ jobs:
           cd kernel
           rm -rf KernelSU drivers/kernelsu
           
-          # FIX: use main branch (stable), not staging (experimental)
           git clone --depth=1 --branch=master https://github.com/backslashxx/KernelSU.git KernelSU
           
           ln -sf ../KernelSU/kernel drivers/kernelsu
