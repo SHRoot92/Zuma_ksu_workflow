@@ -5,7 +5,7 @@ env:
   ANDROID_VERSION: 'android14'
   KERNEL_VERSION: '6.1'
   SUB_VERSION: '126'
-  KERNEL_NAME: 'android14-11-o-gca13bffobf09'
+  KERNEL_NAME: 'android14-11-gfa1d6308d1fe-ab14691759'
   CCACHE_KEY: ccache-neov4-6.1.126
 
 on:
