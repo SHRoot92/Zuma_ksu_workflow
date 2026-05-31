@@ -170,20 +170,20 @@ jobs:
           export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
 
           cat > cc-wrapper <<EOF
-#!/bin/bash
-export LD_PRELOAD="$PRELOAD_LIBS"
-export FAKESTAT="$FAKESTAT"
-export FAKETIME="$FAKETIME"
-clang "\$@"
-EOF
+          #!/bin/bash
+          export LD_PRELOAD="$PRELOAD_LIBS"
+          export FAKESTAT="$FAKESTAT"
+          export FAKETIME="$FAKETIME"
+          clang "\$@"
+          EOF
 
           cat > ld-wrapper <<EOF
-#!/bin/bash
-export LD_PRELOAD="$PRELOAD_LIBS"
-export FAKESTAT="$FAKESTAT"
-export FAKETIME="$FAKETIME"
-ld.lld "\$@"
-EOF
+          #!/bin/bash
+          export LD_PRELOAD="$PRELOAD_LIBS"
+          export FAKESTAT="$FAKESTAT"
+          export FAKETIME="$FAKETIME"
+          ld.lld "\$@"
+          EOF
 
           chmod +x cc-wrapper ld-wrapper
 
