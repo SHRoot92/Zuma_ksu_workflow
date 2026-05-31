@@ -121,7 +121,6 @@ jobs:
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
-          # 修复点：移除了错误的双引号与多余的 $ 符号
           echo "CONFIG_KSU=y" >> "$DEFCONFIG"
           echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG"
@@ -162,44 +161,15 @@ jobs:
 
           cd kernel_workspace/common
 
-          wget -q https://github.com/cctv18/oppo_oplus_realme_sm8650/raw/refs/heads/main/lib/libfakestat.so
-          wget -q https://github.com/cctv18/oppo_oplus_realme_sm8650/raw/refs/heads/main/lib/libfaketimeMT.so
-
-          chmod 777 ./*.so
-
-          RAW_TIME="${{ env.BUILD_TIMESTAMP }}"
-          FORMATTED_TIME=$(date -d "$RAW_TIME" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "2026-01-09 16:33:46")
-
-          export FAKESTAT="$FORMATTED_TIME"
-          export FAKETIME="@$FORMATTED_TIME"
-
-          echo "Setting Faketime to: $FORMATTED_TIME"
-
-          SO_DIR="$(pwd)"
-          export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
-
-          cat > cc-wrapper <<EOF
-          #!/bin/bash
-          export LD_PRELOAD="$PRELOAD_LIBS"
-          export FAKESTAT="$FAKESTAT"
-          export FAKETIME="$FAKETIME"
-          clang "\$@"
-          EOF
-
-          cat > ld-wrapper <<EOF
-          #!/bin/bash
-          export LD_PRELOAD="$PRELOAD_LIBS"
-          export FAKESTAT="$FAKESTAT"
-          export FAKETIME="$FAKETIME"
-          ld.lld "\$@"
-          EOF
-
-          chmod +x cc-wrapper ld-wrapper
-
+         
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
 
+         
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          
+
 
           make -j$(nproc --all) \
             LLVM=1 \
@@ -216,8 +186,8 @@ jobs:
             LLVM=1 \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="$(pwd)/cc-wrapper" \
-            LD="$(pwd)/ld-wrapper" \
+            CC="clang" \
+            LD="ld.lld" \
             HOSTLD=ld.lld \
             O=out \
             KCFLAGS="-O2 -w" \
@@ -247,7 +217,7 @@ jobs:
           KSU_VER="$KSUVER"
           [ -z "$KSU_VER" ] && KSU_VER="unknown"
 
-          ZIP_NAME="AnyKernel3_xxKSU_${KSU_VER}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
+          ZIP_NAME="AK3_xxKSU_${KSU_VER}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
 
           zip -r9 "../${ZIP_NAME}" ./*
 
@@ -258,5 +228,5 @@ jobs:
       - name: Upload AnyKernel3 flashable package
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3_${{ env.KERNEL_VERSION }}_xxKSU
-          path: kernel_workspace/AnyKernel3_*.zip
+          name: AK3_${{ env.KERNEL_VERSION }}_xxKSU
+          path: kernel_workspace/AK3_*.zip
