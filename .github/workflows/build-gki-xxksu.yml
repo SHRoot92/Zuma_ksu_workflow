@@ -9,6 +9,8 @@ env:
   KBUILD_BUILD_USER: "build-user"
   KBUILD_BUILD_HOST: "build-host"
   BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
+  SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
+  KSU_BRANCH: "master"
 
 on:
   workflow_dispatch:
@@ -88,24 +90,20 @@ jobs:
       - name: Setup xxKSU
         id: ksu_version
         run: |
+          
+          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          chmod +x ./sh/*.sh 2>/dev/null || true
+
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          
+          echo "ksuver=$K_VER" >> $GITHUB_OUTPUT
+          echo "KSUVER=$K_VER" >> $GITHUB_ENV
+          echo "xxKSU version: $K_VER"
+
+          
           cd kernel_workspace/common
-
           echo "Cloning xxKSU..."
-          git clone --depth=1 --branch=master https://github.com/backslashxx/KernelSU.git KernelSU
-
-          cd KernelSU
-
-          git fetch --unshallow --quiet 2>/dev/null || true
-
-          KSU_COUNT=$(git rev-list --count HEAD)
-          KSU_VERSION=$((KSU_COUNT + 30000))
-
-          echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-
-          echo "xxKSU version: $KSU_VERSION"
-
-          cd ..
+          git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
 
           ln -sf ../KernelSU/kernel drivers/kernelsu
 
@@ -161,15 +159,11 @@ jobs:
 
           cd kernel_workspace/common
 
-         
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
 
-         
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-          
-
 
           make -j$(nproc --all) \
             LLVM=1 \
@@ -215,6 +209,7 @@ jobs:
           fi
 
           KSU_VER="$KSUVER"
+          [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
           [ -z "$KSU_VER" ] && KSU_VER="unknown"
 
           ZIP_NAME="AK3_xxKSU_${KSU_VER}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
