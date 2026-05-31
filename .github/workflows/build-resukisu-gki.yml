@@ -337,8 +337,7 @@ jobs:
             echo "**Checksums:**"
             echo '```'
             cat release-artifacts/checksums.txt
-            echo '
-```'
+            echo '```'
             } > release_body.md
 
       - name: Upload All Builds to release repo
