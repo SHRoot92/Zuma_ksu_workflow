@@ -36,7 +36,7 @@ on:
       susfs_ref:
         description: 'Override SuSFS ref'
         required: false
-        default: 'gki-android14-6.1-dev'
+        default: 'gki-android14-6.1'
         type: string
       kowsu_ref:
         description: 'Override kowsu KernelSU ref'
@@ -72,7 +72,7 @@ on:
         type: string
       susfs_ref:
         required: false
-        default: 'gki-android14-6.1-dev'
+        default: 'gki-android14-6.1'
         type: string
       kowsu_ref:
         required: false
