@@ -90,7 +90,6 @@ jobs:
       - name: Setup xxKSU
         id: ksu_version
         run: |
-          
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
           chmod +x ./sh/*.sh 2>/dev/null || true
 
@@ -100,7 +99,6 @@ jobs:
           echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
 
-          
           cd kernel_workspace/common
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
@@ -119,11 +117,96 @@ jobs:
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
-          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+          echo "写入自定义内核配置到 $DEFCONFIG ..."
+
+          # --- Core System & FS ---
           echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG"
+          echo "CONFIG_LOG_BUF_SHIFT=21" >> "$DEFCONFIG"
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$DEFCONFIG"
           echo "CONFIG_HEADERS_INSTALL=n" >> "$DEFCONFIG"
+
+          # --- Pillar 1: atp4pixel / Advanced Networking ---
+          echo "CONFIG_NETFILTER_ADVANCED=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_NF_TARGET_TTL=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP6_NF_TARGET_HL=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP6_NF_MATCH_HL=y" >> "$DEFCONFIG"
+          echo "CONFIG_BPF_STREAM_PARSER=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_TARGET_TPROXY=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_SOCKET=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_MARK=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_IPRANGE=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_OWNER=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_MAC=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_MARK=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_CONNMARK=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_TARGET_CONNMARK=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP6_NF_NAT=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP6_NF_TARGET_REDIRECT=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_MULTIPLE_TABLES=y" >> "$DEFCONFIG"
+          echo "CONFIG_IPV6_MULTIPLE_TABLES=y" >> "$DEFCONFIG"
+
+          # --- Pillar 2: Google VPN (XFRM) Coexistence ---
+          echo "CONFIG_XFRM_ALGO=y" >> "$DEFCONFIG"
+          echo "CONFIG_INET_IPCOMP=y" >> "$DEFCONFIG"
+          echo "CONFIG_INET_XFRM_TUNNEL=y" >> "$DEFCONFIG"
+          echo "CONFIG_INET_ESP=y" >> "$DEFCONFIG"
+          echo "CONFIG_XFRM_USER=y" >> "$DEFCONFIG"
+          echo "CONFIG_XFRM_SUB_POLICY=y" >> "$DEFCONFIG"
+          echo "CONFIG_INET_XFRM_MODE_TUNNEL=y" >> "$DEFCONFIG"
+          echo "CONFIG_XFRM_STATISTICS=y" >> "$DEFCONFIG"
+
+          # --- Pillar 3: IPSet Full Suite ---
+          echo "CONFIG_IP_SET=y" >> "$DEFCONFIG"
+          echo "CONFIG_NETFILTER_XT_SET=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_MAX=65534" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_BITMAP_IP=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_BITMAP_IPMAC=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_BITMAP_PORT=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IP=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IPMARK=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IPPORT=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IPPORTIP=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IPPORTNET=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_IPMAC=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_MAC=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_NETPORTNET=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_NET=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_NETNET=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_NETPORT=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_HASH_NETIFACE=y" >> "$DEFCONFIG"
+          echo "CONFIG_IP_SET_LIST_SET=y" >> "$DEFCONFIG"
+
+          # --- Pillar 4: TCP Congestion & BBR ---
+          echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$DEFCONFIG"
+          echo "CONFIG_TCP_CONG_BBR=y" >> "$DEFCONFIG"
+          echo "CONFIG_NET_SCH_FQ=y" >> "$DEFCONFIG"
+          echo "CONFIG_TCP_CONG_BIC=n" >> "$DEFCONFIG"
+          echo "CONFIG_TCP_CONG_WESTWOOD=n" >> "$DEFCONFIG"
+          echo "CONFIG_TCP_CONG_HTCP=n" >> "$DEFCONFIG"
+          echo "CONFIG_DEFAULT_BBR=y" >> "$DEFCONFIG"
+
+          # --- Pillar 5: xxKSU (Hookless / LSM) ---
+          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_EXTRAS=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_ALLOWLIST_WORKAROUND=n" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_DEBUG=n" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_KPROBES_HOOK=n" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_LSM_SECURITY_HOOKS=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y" >> "$DEFCONFIG"
+
+          echo "CONFIG_SECURITY_NETWORK=y" >> "$DEFCONFIG"
+          echo "CONFIG_CGROUPS=y" >> "$DEFCONFIG"
+          echo "CONFIG_CGROUP_BPF=y" >> "$DEFCONFIG"
+          echo "CONFIG_CGROUP_SCHED=y" >> "$DEFCONFIG"
+          echo "CONFIG_CGROUP_PIDS=y" >> "$DEFCONFIG"
+          echo "CONFIG_CGROUP_FREEZER=y" >> "$DEFCONFIG"
+          echo "CONFIG_INOTIFY_USER=y" >> "$DEFCONFIG"
 
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
@@ -132,9 +215,7 @@ jobs:
           cd kernel_workspace
 
           echo "Replacing kernel version suffix..."
-
           SUFFIX="${{ env.KERNEL_NAME }}"
-
           echo "Current kernel version suffix: $SUFFIX"
 
           for f in ./common/scripts/setlocalversion; do
@@ -144,10 +225,11 @@ jobs:
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
+          
+          echo "Optimizing runner disk space..."
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
-          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
-
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$WORKDIR/kernel_workspace/clang20/bin:$PATH"
           CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
 
           echo "Compiler information:"
@@ -158,8 +240,6 @@ jobs:
           [ -z "$pahole_version" ] && echo "pahole version: not installed" || echo "pahole version: $pahole_version"
 
           cd kernel_workspace/common
-
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
 
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
@@ -188,7 +268,6 @@ jobs:
             Image
 
           echo "Kernel build completed."
-
           df -h
 
       - name: Clone AnyKernel3 and package kernel
@@ -196,28 +275,24 @@ jobs:
           cd kernel_workspace
 
           git clone https://github.com/cctv18/AnyKernel3 --depth=1
-
           rm -rf ./AnyKernel3/.git
 
           cd AnyKernel3
-
           cp ../common/out/arch/arm64/boot/Image ./Image
 
           if [[ ! -f ./Image ]]; then
-            echo "Kernel image not found. The build may have failed."
+            echo "::error::Kernel image not found! The build has failed."
             exit 1
           fi
 
-          KSU_VER="$KSUVER"
+          KSU_VER="${{ env.KSUVER }}"
           [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
           [ -z "$KSU_VER" ] && KSU_VER="unknown"
 
           ZIP_NAME="AK3_xxKSU_${KSU_VER}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
 
           zip -r9 "../${ZIP_NAME}" ./*
-
           echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
-
           echo "Packaging completed: ${ZIP_NAME}"
 
       - name: Upload AnyKernel3 flashable package
