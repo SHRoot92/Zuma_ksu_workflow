@@ -72,13 +72,13 @@ jobs:
           unzip -q clang.zip -d clang20
           rm -f clang.zip
 
-          echo "Downloading build tools..."
-          mkdir -p build-tools
+          echo "Downloading ARM GCC toolchain..."
+          mkdir -p gcc-aarch64
           aria2c -s16 -x16 -k1M \
-            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
-            -o build-tools.zip
-          unzip -q build-tools.zip -d build-tools
-          rm -f build-tools.zip
+            "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz" \
+            -o gcc-aarch64.tar.xz
+          tar -xJf gcc-aarch64.tar.xz -C gcc-aarch64 --strip-components=1
+          rm -f gcc-aarch64.tar.xz
 
           echo "Source and toolchain initialization completed."
 
@@ -253,8 +253,8 @@ jobs:
           echo "Optimizing runner disk space..."
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
-          # clang20 优先，build-tools 垫底
-          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+          # clang20 优先，ARM GCC 垫底
+          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$WORKDIR/kernel_workspace/gcc-aarch64/bin:$PATH"
           CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
 
           echo "Compiler information:"
@@ -278,7 +278,7 @@ jobs:
           make -j$(nproc --all) \
             LLVM=1 \
             ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-none-linux-gnu- \
             CC="ccache clang" \
             LD="ld.lld" \
             HOSTLD=ld.lld \
@@ -289,7 +289,7 @@ jobs:
           make -j$(nproc --all) \
             LLVM=1 \
             ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-none-linux-gnu- \
             CC="ccache clang" \
             LD="ld.lld" \
             HOSTLD=ld.lld \
