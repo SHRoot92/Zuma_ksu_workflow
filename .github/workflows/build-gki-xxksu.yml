@@ -210,7 +210,7 @@ jobs:
           echo "CONFIG_KSU_DEBUG=n" >> "$DEFCONFIG"
           echo "CONFIG_KSU_KPROBES_HOOK=n" >> "$DEFCONFIG"
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=n" >> "$DEFCONFIG"
-          echo "CONFIG_KSU_LSM_SECURITY_HOOKS=n" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_LSM_SECURITY_HOOKS=y" >> "$DEFCONFIG"
           echo "CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y" >> "$DEFCONFIG"
 
           echo "CONFIG_SECURITY_NETWORK=y" >> "$DEFCONFIG"
