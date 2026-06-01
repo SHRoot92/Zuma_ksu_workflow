@@ -101,12 +101,12 @@ jobs:
           mkdir -p /tmp/toolchains
 
           echo "Downloading ARM GNU Toolchain..."
-          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz" -o /tmp/toolchains/arm64.tar.xz
+          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz" -o /tmp/toolchains/arm64.tar.xz
           tar -xf /tmp/toolchains/arm64.tar.xz -C /tmp/toolchains/
           ARM64_DIR=$(find /tmp/toolchains -maxdepth 1 -type d -name "arm-gnu-toolchain-*-aarch64-none-linux-gnu" | head -1)
           echo "ARM64_TOOLCHAIN=${ARM64_DIR}/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
 
-          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz" -o /tmp/toolchains/arm32.tar.xz
+          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz" -o /tmp/toolchains/arm32.tar.xz
           tar -xf /tmp/toolchains/arm32.tar.xz -C /tmp/toolchains/
           ARM32_DIR=$(find /tmp/toolchains -maxdepth 1 -type d -name "arm-gnu-toolchain-*-arm-none-linux-gnueabihf" | head -1)
           echo "ARM32_TOOLCHAIN=${ARM32_DIR}/bin/arm-none-linux-gnueabihf-" >> $GITHUB_ENV
