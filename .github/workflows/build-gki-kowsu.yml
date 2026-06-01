@@ -1,4 +1,4 @@
-Name: Build GKI Kernel with KowSU Runner
+name: Build GKI Kernel with KowSU Runner
 
 on:
   workflow_dispatch:
