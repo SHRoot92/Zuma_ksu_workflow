@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KowSU Runner
+Name: Build GKI Kernel with KowSU Runner
 
 on:
   workflow_dispatch:
@@ -36,45 +36,10 @@ on:
       susfs_ref:
         description: 'Override SuSFS ref'
         required: false
-        default: 'gki-android14-6.1'
+        default: 'gki-android14-6.1-dev'
         type: string
       kowsu_ref:
         description: 'Override kowsu KernelSU ref'
-        required: false
-        default: 'master'
-        type: string
-
-  workflow_call:
-    inputs:
-      disable_susfs:
-        required: false
-        default: false
-        type: boolean
-      force_clean_build:
-        required: false
-        default: false
-        type: boolean
-      create_release:
-        required: false
-        default: true
-        type: boolean
-      make_jobs:
-        required: false
-        default: 'auto'
-        type: string
-      dry_run_only:
-        required: false
-        default: false
-        type: boolean
-      kernel_ref:
-        required: false
-        default: 'android14-6.1-2026-03'
-        type: string
-      susfs_ref:
-        required: false
-        default: 'gki-android14-6.1'
-        type: string
-      kowsu_ref:
         required: false
         default: 'master'
         type: string
@@ -183,8 +148,9 @@ jobs:
           cd kernel
           patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
+         
           cd KernelSU
-          patch -p1 --forward < ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+          patch -p1 --forward < ../../.github/patches/10_enable_susfs_for_ksu.patch || true
 
       - name: Apply Fix Patches
         run: |
