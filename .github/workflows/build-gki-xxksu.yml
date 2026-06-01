@@ -121,7 +121,7 @@ jobs:
         run: |
           cd kernel_workspace/common
           
-          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/patch_source/.github/patches/manual-security-hooks-v2.0.patch"
+          #patch -p1 -l --fuzz=3 < "${{ github.workspace }}/patch_source/.github/patches/manual-security-hooks-v2.0.patch"
           patch -p1 -l --fuzz=3 < "${{ github.workspace }}/patch_source/.github/patches/scope-min-manual-hooks-v2.2.patch"
 
       - name: Add xxKSU base configuration
