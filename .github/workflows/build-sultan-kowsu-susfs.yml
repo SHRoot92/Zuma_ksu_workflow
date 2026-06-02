@@ -1,4 +1,4 @@
-name: Build Sultan + KowSU + SUSFS
+name: Build Sultan + KowSU + SUSFS-mini
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ env:
   ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SUSFS_REPO_URL: https://gitlab.com/simonpunk/susfs4ksu
-  SUSFS_REPO_BRANCH: gki-android14-6.1
+  SUSFS_REPO_BRANCH: sultan-shiba-susfs-minimal
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_REPO: KOWX712/KernelSU
   KSU_BRANCH: master
