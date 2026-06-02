@@ -84,8 +84,8 @@ jobs:
          patch -p1 --forward < ../../.github/patches/10_enable_susfs_for_ksu.patch || true
          cd ../
         
-         cp ../kernel_patches/sultan/sys.c_fix.patch ./
-         patch -p1 < sys.c_fix.patch || true
+         #cp ../kernel_patches/sultan/sys.c_fix.patch ./
+         #patch -p1 < sys.c_fix.patch || true
           
       - name: Global Defconfig Analysis
         working-directory: sultan
