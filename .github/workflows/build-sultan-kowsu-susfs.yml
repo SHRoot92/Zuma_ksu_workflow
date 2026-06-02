@@ -59,6 +59,12 @@ jobs:
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
+          echo "======================================"
+          echo "▶ Sultan Kernel Tag: $S_TAG"
+          echo "▶ KernelSU Version : $K_VER"
+          echo "▶ SuSFS Version    : $SUSFS_VER"
+          echo "======================================"
+
       - name: KSU & Patches
         working-directory: sultan
         run: |
