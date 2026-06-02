@@ -49,9 +49,9 @@ jobs:
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           K_VER=$(./sh/get_ksuver.sh "KOWX712" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
           
-          SUSFS_DEF_PATH="susfs4ksu/kernel_patches/include/linux/susfs_def.h"
-          if [ -f "$SUSFS_DEF_PATH" ]; then
-            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' "$SUSFS_DEF_PATH" | awk -F '"' '{print $2}')
+          SUSFS_PATH="susfs4ksu/kernel_patches/include/linux/susfs.h"
+          if [ -f "$SUSFS_PATH" ]; then
+            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' "$SUSFS_PATH" | awk -F '"' '{print $2}')
           fi
           SUSFS_VER=${SUSFS_VER:-"unknown"}
           
