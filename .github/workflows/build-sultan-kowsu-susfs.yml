@@ -1,4 +1,4 @@
-name: Build Sultan + KowSU + SUSFS-mini
+name: Build Sultan + KowSU + SUSFS mini
 
 on:
   workflow_dispatch:
