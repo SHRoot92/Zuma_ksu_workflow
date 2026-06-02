@@ -1,4 +1,4 @@
-name: Build Sultan A16 + xxKSU
+name: Build Sultan + xxKSU
 
 on:
   workflow_dispatch:
