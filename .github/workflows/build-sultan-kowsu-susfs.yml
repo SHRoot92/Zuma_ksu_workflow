@@ -75,7 +75,7 @@ jobs:
          cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
 
          # Fix open.c for Sultan
-         perl -0pi -e 's/if \(IS_ERR\(f\) && !libperfmgr_redirect\(&f, dfd, tmp, &op, how\)\) \{/if (IS_ERR(f)) {/g' fs/open.c
+         #perl -0pi -e 's/if \(IS_ERR\(f\) && !libperfmgr_redirect\(&f, dfd, tmp, &op, how\)\) \{/if (IS_ERR(f)) {/g' fs/open.c
          
          patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
