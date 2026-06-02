@@ -1,9 +1,8 @@
-name: Build anaconda + xxKSU + SUSFS
+name: Build Anaconda + xxKSU + SUSFS
 
 permissions:
   contents: write
   actions: write
-  
   
 on:
   workflow_dispatch:
@@ -53,7 +52,6 @@ jobs:
             "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
             "../kernel_patches/sultan/61_scripts_setlocalversion.patch"
             "../kernel_patches/sultan/62_init_Makefile.patch"
-            
           )
           for p in "${PATCHES[@]}"; do
             [ -f "$p" ] && patch -p1 < "$p" || echo "Optional patch $p skipped."
@@ -240,10 +238,30 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # 1️⃣ 先打 Tag 并完成 Git 清理，此时工作区是干净的
+      - name: Prepare Git Tag
+        run: |
+          DATE=$(date +"%Y.%m.%d")
+          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
+          REV=$(( ${MAX_REV:-0} + 1 ))
+          TAG="${DATE}-r${REV}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git reset --hard HEAD
+          git clean -fd
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      # 2️⃣ 打完 Tag 后再行下载，这样 artifacts 文件夹不会被上面的 git clean 扫地出门
       - uses: actions/download-artifact@v8
         with:
           path: ./artifacts
           merge-multiple: true
+
+      # 3️⃣ 最终创建 Release 并发布
       - name: Tag and Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -252,18 +270,6 @@ jobs:
           S_TAG: ${{ needs.build.outputs.sultan_tag }}
           GCC_VER: ${{ needs.build.outputs.gcc_ver }}
         run: |
-          DATE=$(date +"%Y.%m.%d")
-          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
-          REV=$(( ${MAX_REV:-0} + 1 ))
-          TAG="${DATE}-r${REV}"
-          
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git reset --hard HEAD
-          git clean -fd
-          git tag "$TAG"
-          git push origin "$TAG"
-          
           gh release create "$TAG" artifacts/*.zip \
             --title "Kernel Build — $TAG" \
             --notes "
