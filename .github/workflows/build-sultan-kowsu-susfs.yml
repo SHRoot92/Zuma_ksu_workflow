@@ -243,7 +243,7 @@ jobs:
           SUSFS_VER: ${{ steps.meta.outputs.susfs_ver }}
         run: |
           DATE=$(date +"%Y.%m.%d")
-          TAG="${DATE}-mini-b${{ github.run_number }}"
+          TAG="${DATE}-mini-${{ github.run_number }}"
           
          
           gh release create "$TAG" "${{ env.ZIP_PATH }}" \
@@ -253,8 +253,8 @@ jobs:
             | Component | Details |
             | :--- | :--- |
             | **Kernel Base** | Sultan ($S_TAG) |
-            | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
-            | **xxKSU Ver** | \`r$KSU_VER\` |
+            | **Manager** | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) |
+            | **KowSU Ver** | \`r$KSU_VER\` |
             | **SuSFS Ver** | \`$SUSFS_VER\` |
             | **Compiler** | GCC 14.2.rel1 |
             | **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
