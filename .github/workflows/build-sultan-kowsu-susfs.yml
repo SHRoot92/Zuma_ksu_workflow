@@ -106,7 +106,7 @@ jobs:
           CROSS_COMPILE: ${{ env.GCC_PATH }}
           CC: ${{ env.GCC_PATH }}gcc
         run: |
-          
+         
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
           
           cat >> out/.config <<EOF
@@ -179,7 +179,7 @@ jobs:
           CONFIG_TCP_CONG_HTCP=n
           CONFIG_DEFAULT_BBR=y
 
-          # --- Pillar 5: KSU (Hookless / LSM) ---
+          # --- Pillar 5: xxKSU (Hookless / LSM) ---
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_ALLOWLIST_WORKAROUND=n
@@ -235,24 +235,17 @@ jobs:
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
 
-      - name: Clean Git & Create Release
+      - name: Create Release
         env:
           GH_TOKEN: ${{ github.token }}
           KSU_VER: ${{ steps.meta.outputs.ksu_ver }}
           S_TAG: ${{ steps.meta.outputs.s_tag }}
           SUSFS_VER: ${{ steps.meta.outputs.susfs_ver }}
         run: |
-          git reset --hard HEAD
-          git clean -fd
-
           DATE=$(date +"%Y.%m.%d")
           TAG="${DATE}-mini-b${{ github.run_number }}"
           
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
-          
+         
           gh release create "$TAG" "${{ env.ZIP_PATH }}" \
             --title "Kernel Build Mini — $TAG" \
             --notes "
