@@ -219,7 +219,7 @@ jobs:
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           SU_VER="${{ steps.meta.outputs.susfs_ver }}"
           
-          ZIP_NAME="Sultan-gs201-${S_TAG}-xxKSU-r${K_VER}-SUSFS-${SU_VER}.zip"
+          ZIP_NAME="Anaconda-gs201-${S_TAG}-xxKSU-r${K_VER}-SUSFS-${SU_VER}.zip"
           ( cd AK3 && zip -r9 "../${ZIP_NAME}" . -x "*.git*" )
           echo "ZIP_PATH=$GITHUB_WORKSPACE/${ZIP_NAME}" >> "$GITHUB_ENV"
 
@@ -268,7 +268,7 @@ jobs:
             ### 🚀 Build Information
             | Component | Details |
             | :--- | :--- |
-            | **Kernel Base** | Sultan ($S_TAG) |
+            | **Kernel Base** | Anaconda ($S_TAG) |
             | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
             | **xxKSU Ver** | \`r$K_VER\` |
             | **SUSFS Ver** | \`$SU_VER\` |
