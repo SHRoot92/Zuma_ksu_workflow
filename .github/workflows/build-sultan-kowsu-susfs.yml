@@ -48,8 +48,16 @@ jobs:
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           K_VER=$(./sh/get_ksuver.sh "KOWX712" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          
+          SUSFS_DEF_PATH="susfs4ksu/kernel_patches/include/linux/susfs_def.h"
+          if [ -f "$SUSFS_DEF_PATH" ]; then
+            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' "$SUSFS_DEF_PATH" | awk -F '"' '{print $2}')
+          fi
+          SUSFS_VER=${SUSFS_VER:-"unknown"}
+          
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
+          echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
       - name: KSU & Patches
         working-directory: sultan
@@ -71,7 +79,6 @@ jobs:
           
           patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
-          
           if [ -d "KernelSU" ]; then
             cd KernelSU
           else
@@ -99,7 +106,7 @@ jobs:
           CROSS_COMPILE: ${{ env.GCC_PATH }}
           CC: ${{ env.GCC_PATH }}gcc
         run: |
-
+          
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
           
           cat >> out/.config <<EOF
@@ -172,7 +179,7 @@ jobs:
           CONFIG_TCP_CONG_HTCP=n
           CONFIG_DEFAULT_BBR=y
 
-          # --- Pillar 5: xxKSU (Hookless / LSM) ---
+          # --- Pillar 5: KSU (Hookless / LSM) ---
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_ALLOWLIST_WORKAROUND=n
@@ -220,7 +227,10 @@ jobs:
         run: |
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-          ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-KowSU-mini-r${{ steps.meta.outputs.ksu_ver }}.zip"
+          
+          CLEAN_S_TAG=$(echo "${{ steps.meta.outputs.s_tag }}" | sed 's/[^a-zA-Oa-z0-9._-]/_/g')
+          
+          ZIP_NAME="Sultan-gs201-${CLEAN_S_TAG}-KowSU-SUSFS-mini-${{ steps.meta.outputs.susfs_ver }}+${{ steps.meta.outputs.ksu_ver }}.zip"
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
@@ -230,21 +240,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           KSU_VER: ${{ steps.meta.outputs.ksu_ver }}
           S_TAG: ${{ steps.meta.outputs.s_tag }}
+          SUSFS_VER: ${{ steps.meta.outputs.susfs_ver }}
         run: |
-          
           git reset --hard HEAD
           git clean -fd
 
-          
           DATE=$(date +"%Y.%m.%d")
-          TAG="${DATE}-mini-${{ github.run_number }}"
+          TAG="${DATE}-mini-b${{ github.run_number }}"
           
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git tag "$TAG"
           git push origin "$TAG"
           
-         
           gh release create "$TAG" "${{ env.ZIP_PATH }}" \
             --title "Kernel Build Mini — $TAG" \
             --notes "
@@ -254,6 +262,7 @@ jobs:
             | **Kernel Base** | Sultan ($S_TAG) |
             | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
             | **xxKSU Ver** | \`r$KSU_VER\` |
+            | **SuSFS Ver** | \`$SUSFS_VER\` |
             | **Compiler** | GCC 14.2.rel1 |
             | **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
             
