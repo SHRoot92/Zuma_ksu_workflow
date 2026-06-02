@@ -90,7 +90,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Checkout Workflow Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Build Environment
         run: |
@@ -146,7 +146,7 @@ jobs:
           cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
           
           cd kernel
-          patch -p1 --forward < ../../.github/patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          patch -p1 --forward < ../.github/patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
          
           cd KernelSU
