@@ -146,10 +146,7 @@ jobs:
           cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
           
           cd kernel
-
-        
-          sed -i 's|^#include <trace/hooks/blk.h>|// #include <trace/hooks/blk.h>|' fs/namespace.c
-          patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          patch -p1 --forward < ../../.github/patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
          
           cd KernelSU
@@ -194,7 +191,7 @@ jobs:
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_LOCALVERSION_AUTO=n
-          CONFIG_LOCALVERSION="-deepongi+"
+          CONFIG_LOCALVERSION="android14-11-gfa1d6308d1fe-ab14691759"
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           CONFIG_LTO_NONE=y
           EOF
