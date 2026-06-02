@@ -67,19 +67,23 @@ jobs:
       - name: Setup SuSFS
         working-directory: sultan
         run: |
-          set -e
-          cp ../susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
-          cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
+         set -e
           
-          cd kernel
-          patch -p1 --forward < ../.github/patches/50_add_susfs_in_gki-android14-6.1.patch || true
+         mkdir -p fs include/linux
+         cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
+         cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
+         cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
+          
+         
+         patch -p1 --forward < ../.github/patches/50_add_susfs_in_gki-android14-6.1.patch || true
 
-          cd KernelSU
-          patch -p1 --forward < ../../.github/patches/10_enable_susfs_for_ksu.patch || true
+         
+         cd KernelSU
+         patch -p1 --forward < ../../.github/patches/10_enable_susfs_for_ksu.patch || true
 
-          cp ../kernel_patches/sultan/sys.c_fix.patch ./
-          patch -p1 < sys.c_fix.patch || true
+        
+         cp ../kernel_patches/sultan/sys.c_fix.patch ./
+         patch -p1 < sys.c_fix.patch || true
           
       - name: Global Defconfig Analysis
         working-directory: sultan
