@@ -65,6 +65,7 @@ jobs:
 
 
       - name: Setup SuSFS
+        working-directory: sultan
         run: |
           set -e
           cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
