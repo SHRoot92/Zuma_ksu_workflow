@@ -1,4 +1,4 @@
-name: Build Sultan A16 + xxKSU staging
+name: Build Sultan + xxKSU staging
 
 on:
   workflow_dispatch:
