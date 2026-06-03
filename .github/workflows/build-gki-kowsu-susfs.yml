@@ -26,17 +26,26 @@ jobs:
     timeout-minutes: 180
     
     steps:
+      - name: Maximize build disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 5120
+          swap-size-mb: 2048
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
+          remove-codeql: true
+          remove-docker-images: true
+
+      
       - name: Checkout Workflow Repo
         uses: actions/checkout@v6
 
-      - name: Free Disk Space & Install Dependencies
+      
+      - name: Install Dependencies
         run: |
-          sudo apt-get purge -yq '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' || true
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update -qq
           sudo apt-get install -y bc bison flex libssl-dev libelf-dev build-essential \
-            binutils-aarch64-linux-gnu python3 rsync ccache curl zip unzip git \
-            dwarves pahole
 
       - name: Restore ccache
         uses: actions/cache@v5
