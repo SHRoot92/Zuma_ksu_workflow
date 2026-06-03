@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KOWSU
+name: Build GKI Kernel with KowSU SuSFS
 
 on:
   workflow_dispatch:
