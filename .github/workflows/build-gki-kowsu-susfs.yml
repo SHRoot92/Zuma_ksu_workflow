@@ -80,42 +80,43 @@ jobs:
 
       - name: Setup SuSFS
         run: |
-          # Clone SuSFS
-          git clone --depth=1 --branch=gki-android14-6.1 \
-            https://gitlab.com/simonpunk/susfs4ksu susfs4ksu
-          
-          # Copy SuSFS core files to kernel
-          cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
-          cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
-          cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
-          
-          cd kernel
-          
-          # Apply core SuSFS kernel patch
-          echo "Applying core SuSFS patch..."
-          patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch
-          if [ $? -ne 0 ]; then
-            echo "❌ Core SuSFS patch failed!"
-            exit 1
-          fi
-          
-          # Apply KSU-side SuSFS patch (在 kernel 目录下执行，不是在 KernelSU 目录)
-          echo "Applying KSU-side SuSFS patch..."
-          if [ ! -f "../.github/patches/10_enable_susfs_for_ksu.patch" ]; then
-            echo "❌ Patch file not found at .github/patches/10_enable_susfs_for_ksu.patch"
-            exit 1
-          fi
-
-          cd KernelSU
-          patch -p1 < "../../.github/patches/10_enable_susfs_for_ksu.patch"
-          if [ $? -ne 0 ]; then
-            echo "❌ KSU-side SuSFS patch failed!"
-            exit 1
-          fi
-          
-          cd ..
-          
-          echo "✅ SuSFS patches applied successfully!"
+         # Clone SuSFS
+         git clone --depth=1 --branch=gki-android14-6.1-dev \
+         https://gitlab.com/simonpunk/susfs4ksu susfs4ksu
+    
+         # Copy SuSFS core files to kernel
+         cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
+         cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
+         cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
+    
+         cd kernel
+    
+         # Apply core SuSFS kernel patch
+         echo "Applying core SuSFS patch..."
+         patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch
+         if [ $? -ne 0 ]; then
+         echo "❌ Core SuSFS patch failed!"
+         exit 1
+         fi
+    
+         # Apply KSU-side SuSFS patch (在 KernelSU 目录内)
+         cd KernelSU
+         echo "Applying KSU-side SuSFS patch..."
+         PATCH_FILE="${{ github.workspace }}/.github/patches/10_enable_susfs_for_ksu.patch"
+         if [ ! -f "$PATCH_FILE" ]; then
+         echo "❌ Patch file not found at $PATCH_FILE"
+         exit 1
+         fi
+    
+         patch -p1 < "$PATCH_FILE"
+         if [ $? -ne 0 ]; then
+         echo "❌ KSU-side SuSFS patch failed!"
+         exit 1
+         fi
+    
+         cd ../..
+    
+         echo "✅ SuSFS patches applied successfully!"
 
       - name: Verify SuSFS Applied
         run: |
