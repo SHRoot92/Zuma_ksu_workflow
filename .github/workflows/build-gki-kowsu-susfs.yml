@@ -27,7 +27,7 @@ jobs:
     
     steps:
       - name: Checkout Workflow Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Free Disk Space & Install Dependencies
         run: |
@@ -39,7 +39,7 @@ jobs:
             dwarves pahole aria2c
 
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-kowsu-${{ github.run_id }}
@@ -69,7 +69,7 @@ jobs:
           git clone --depth=1 --branch=android14-6.1-2026-03 \
             https://android.googlesource.com/kernel/common kernel
 
-      - name: Setup KOWSU
+      - name: Setup KowSU
         run: |
           cd kernel
           rm -rf KernelSU drivers/kernelsu
@@ -81,7 +81,7 @@ jobs:
       - name: Setup SuSFS
         run: |
           # Clone SuSFS
-          git clone --depth=1 --branch=gki-android14-6.1-dev \
+          git clone --depth=1 --branch=gki-android14-6.1 \
             https://gitlab.com/simonpunk/susfs4ksu susfs4ksu
           
           # Copy SuSFS core files to kernel
@@ -105,8 +105,9 @@ jobs:
             echo "❌ Patch file not found at .github/patches/10_enable_susfs_for_ksu.patch"
             exit 1
           fi
-          
-          patch -p1 < "../.github/patches/10_enable_susfs_for_ksu.patch"
+
+          cd KernelSU
+          patch -p1 < "../../.github/patches/10_enable_susfs_for_ksu.patch"
           if [ $? -ne 0 ]; then
             echo "❌ KSU-side SuSFS patch failed!"
             exit 1
