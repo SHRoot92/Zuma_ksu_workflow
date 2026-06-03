@@ -162,7 +162,7 @@ jobs:
         
         # Clone AnyKernel3
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.ANYKERNEL_BRANCH }} \
-          https://github.com/deepongi-labs/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
+          https://github.com/yapixel/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
         
         # Clone kernel patches
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.PATCHES_BRANCH }} ${{ env.PATCHES_REPO }} kernel_patches
@@ -172,8 +172,8 @@ jobs:
       run: |
         git clean -fdx || true
 
-    - name: Configure Pixel 8 Pro
-      if: env.PIXEL8A == 'y'
+    - name: Configure Pixel 7
+      if: env.PIXEL7 == 'y'
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
         CONFIG="${{ env.CONFIG_FILE }}"
