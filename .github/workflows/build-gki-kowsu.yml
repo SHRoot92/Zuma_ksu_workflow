@@ -1,4 +1,4 @@
-Name: Build GKI Kernel with KowSU & Clang22
+name: Build GKI Kernel with KowSU & Clang22
 
 on:
   workflow_dispatch:
