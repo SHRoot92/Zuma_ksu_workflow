@@ -110,13 +110,13 @@ jobs:
         key: kernel-build-${{ env.LTO_TYPE }}
         max-size: 5G
 
-    - name: Download and setup Clang 22
+    - name: Download and setup Clang
       run: |
         mkdir -p $HOME/clang
         cd $HOME/clang
-        
-        # Download Clang 22 from ZyCromerZ
-        wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+        wget https://github.com/greenforce-project/greenforce_clang/releases/download/20260601/gf-clang-23.0.0-20260601.tar.gz -O clang.tar.gz
+        #wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+        #aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
         tar -xzf clang.tar.gz
         rm clang.tar.gz
         
@@ -162,7 +162,7 @@ jobs:
         
         # Clone AnyKernel3
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.ANYKERNEL_BRANCH }} \
-          https://github.com/yapixel/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
+          https://github.com/deepongi-labs/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
         
         # Clone kernel patches
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.PATCHES_BRANCH }} ${{ env.PATCHES_REPO }} kernel_patches
@@ -224,7 +224,7 @@ jobs:
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
           echo "Copying patches from local workspace..."
-          # 本地相对路径：由于处于 common 目录中，本地工作区根目录为 ../
+          
           LOCAL_PATCH_DIR="../.github/patches/kowsu"
           
           echo "Applying SUSFS patches to kernel side..."
@@ -240,7 +240,7 @@ jobs:
           
           cd ../
           # Hide Stuff
-          cp ../kernel_patches/69_hide_stuff.patch .
+          cp ../kernel_patches/archived/69_hide_stuff.patch .
           patch -p1 -F 3 < 69_hide_stuff.patch || true
 
     - name: Compute KSU Version
