@@ -231,8 +231,8 @@ jobs:
           cp -r ../susfs4ksu/kernel_patches/fs/* ./fs/
           cp -r ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
           
-          patch --fuzz=10 -p1 < "${LOCAL_PATCH_DIR}/0001-50_add_susfs_to_kernelside_KOWX712.patch" || true
-          rm -f fs/proc/base.c.rej fs/proc/base.c.orig
+          patch  -p1 < "${LOCAL_PATCH_DIR}/50_add_susfs_in_gki-android14-6.1.patch" || true
+          #rm -f fs/proc/base.c.rej fs/proc/base.c.orig
           
           cd KernelSU
           echo "Applying KSU side patch..."
