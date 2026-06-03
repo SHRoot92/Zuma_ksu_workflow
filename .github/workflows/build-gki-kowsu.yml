@@ -1,0 +1,463 @@
+Name: Build GKI Kernel with KowSU & Clang22
+
+on:
+  workflow_dispatch:
+    inputs:
+      pixel8a:
+        description: 'Enable Pixel 7 configuration (y/n)'
+        required: false
+        default: 'y'
+      lto_type:
+        description: 'LTO type (full/thin/none)'
+        required: false
+        default: 'thin'
+      build_clean:
+        description: 'Build clean mode (always/auto/never)'
+        required: false
+        default: 'always'
+
+env:
+  # Build configuration
+  BUILD: dev
+  PIXEL7: ${{ github.event.inputs.pixel7 || 'y' }}
+  LTO_TYPE: ${{ github.event.inputs.lto_type || 'thin' }}
+  ZIP_PREFIX: AK3-A14-6.1.162-KowSU
+  KERNEL_DIR: common
+  CONFIG_FILE: arch/arm64/configs/gki_defconfig
+  OUT_DIR: out
+  BUILD_CLEAN: ${{ github.event.inputs.build_clean || 'always' }}
+  RETRY: 3
+  REPO_DEPTH: 1
+  KSUN_BRANCH: master
+  ANYKERNEL_DIR: AnyKernel3
+  ANYKERNEL_BRANCH: gki-2.0
+  SUSFS_REPO: https://gitlab.com/simonpunk/susfs4ksu.git
+  SUSFS_BRANCH: gki-android14-6.1
+  PATCHES_REPO: https://github.com/yapixel/kernel_patches
+  PATCHES_BRANCH: dev
+  BUILDS_DIR: builds/6.1.162
+  LOCALVERSION:
+  
+  GCC_VERSION: "14.2.rel1"
+  
+  # Compiler configuration
+  USE_CCACHE: 1
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  LLVM_CACHE_PATH: ${{ github.workspace }}/.cache/llvm
+  
+  # GitHub-specific
+  GIT_SHORT_SHA: ${{ github.event.pull_request.head.sha && github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Check Initial Disk Space
+      run: |
+          echo "===== Initial Total Disk Space in GB ====="
+          df -BG
+          
+    - name: Download Apache Arrow's util_free_space.sh
+      run: |
+          curl -L -o util_free_space.sh https://raw.githubusercontent.com/yapixel/kernel_patches/refs/heads/dev/util_free_space.sh
+          chmod +x util_free_space.sh
+          ./util_free_space.sh
+          
+    - name: Check Disk Space After Cleanup
+      run: |
+          echo "===== Total Disk Space After Cleanup in GB ====="
+          df -BG
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up environment
+      run: |
+        echo "GIT_SHORT_SHA=$(echo ${{ env.GIT_SHORT_SHA }} | cut -c1-7)" >> $GITHUB_ENV
+        echo "THREADS=$(nproc)" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          bc \
+          bison \
+          flex \
+          libssl-dev \
+          libelf-dev \
+          libncurses-dev \
+          zip \
+          ccache \
+          curl \
+          git \
+          wget \
+          cpio \
+          python3 \
+          python3-pip \
+          device-tree-compiler \
+          kmod \
+          dwarves \
+          pahole
+
+    - name: Set up ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: kernel-build-${{ env.LTO_TYPE }}
+        max-size: 5G
+
+    - name: Download and setup Clang 22
+      run: |
+        mkdir -p $HOME/clang
+        cd $HOME/clang
+        
+        # Download Clang 22 from ZyCromerZ
+        wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+        tar -xzf clang.tar.gz
+        rm clang.tar.gz
+        
+        echo "CLANG_PATH=$HOME/clang/bin" >> $GITHUB_ENV
+        echo "$HOME/clang/bin" >> $GITHUB_PATH
+
+    - name: Download ARM64 GCC toolchain
+      run: |
+        mkdir -p $HOME/toolchains
+        cd $HOME/toolchains
+        
+        BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel"
+        ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+        
+        wget -q "${BASE_URL}/${ARCHIVE}" -O gcc64.tar.gz
+        tar -xf gcc64.tar.gz
+        rm gcc64.tar.gz
+        
+        echo "ARM64_TOOLCHAIN=$HOME/toolchains/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
+
+    - name: Download ARM32 GCC toolchain
+      run: |
+        mkdir -p $HOME/toolchains
+        cd $HOME/toolchains
+        
+        BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel"
+        ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-arm-none-eabi.tar.xz"
+        
+        wget -q "${BASE_URL}/${ARCHIVE}" -O gcc32.tar.gz
+        tar -xf gcc32.tar.gz
+        rm gcc32.tar.gz
+        
+        echo "ARM32_TOOLCHAIN=$HOME/toolchains/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-arm-none-eabi/bin/arm-none-eabi-" >> $GITHUB_ENV
+
+    - name: Clone kernel source
+      run: |
+        git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-6.1 ${{ env.KERNEL_DIR }}
+
+    - name: Setup repositories
+      run: |
+        # Clone susfs4ksu
+        git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.SUSFS_BRANCH }} ${{ env.SUSFS_REPO }} susfs4ksu
+        
+        # Clone AnyKernel3
+        git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.ANYKERNEL_BRANCH }} \
+          https://github.com/yapixel/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
+        
+        # Clone kernel patches
+        git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.PATCHES_BRANCH }} ${{ env.PATCHES_REPO }} kernel_patches
+
+    - name: Prepare kernel source
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        git clean -fdx || true
+
+    - name: Configure Pixel 8 Pro
+      if: env.PIXEL8A == 'y'
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        CONFIG="${{ env.CONFIG_FILE }}"
+        
+        # Add Pixel 8a specific configurations
+        cat >> "$CONFIG" << EOF
+        CONFIG_ARM64_CORTEX_X3=y
+        CONFIG_ARM64_CORTEX_A715=y
+        CONFIG_ARM64_CORTEX_A510=y
+        CONFIG_ARM64_VA_BITS=48
+        CONFIG_ARM64_PA_BITS=48
+        CONFIG_ARM64_TAGGED_ADDR_ABI=y
+        CONFIG_ARM64_SVE=y
+        CONFIG_ARM64_BTI=y
+        CONFIG_ARM64_PTR_AUTH=y
+        CONFIG_SCHED_MC=y
+        CONFIG_SCHED_CORE=y
+        CONFIG_ENERGY_MODEL=y
+        CONFIG_UCLAMP_TASK=y
+        CONFIG_UCLAMP_TASK_GROUP=y
+        CONFIG_SCHEDUTIL=y
+        CONFIG_CPU_FREQ=y
+        CONFIG_CPUFREQ_DT=y
+        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+        CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+        CONFIG_STACKPROTECTOR=n
+        CONFIG_STACKPROTECTOR_STRONG=n
+        EOF
+
+    - name: Configure LTO
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        CONFIG="${{ env.CONFIG_FILE }}"
+        sed -i -E '/^CONFIG_LTO_(CLANG_(FULL|THIN)|NONE)=/d' "$CONFIG" || true
+        
+        case "${{ env.LTO_TYPE }}" in
+          full) echo "CONFIG_LTO_CLANG_FULL=y" >> "$CONFIG" ;;
+          thin) echo "CONFIG_LTO_CLANG_THIN=y" >> "$CONFIG" ;;
+          none) echo "CONFIG_LTO_NONE=y" >> "$CONFIG" ;;
+        esac
+
+    - name: Install KowSU
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        curl -LSs https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/${{ env.KSUN_BRANCH }}/kernel/setup.sh | bash -s ${{ env.KSUN_BRANCH }}
+
+    - name: Apply SUSFS Patches for KernelSU Variants
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+          echo "Copying patches from local workspace..."
+          
+          LOCAL_PATCH_DIR="../.github/patches/kowsu"
+          
+          echo "Applying SUSFS patches to kernel side..."
+          cp -r ../susfs4ksu/kernel_patches/fs/* ./fs/
+          cp -r ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
+          
+          patch  -p1 < "${LOCAL_PATCH_DIR}/50_add_susfs_in_gki-android14-6.1.patch" || true
+         
+          cd KernelSU
+          echo "Applying KSU side patch..."
+          patch -p1 < "../${LOCAL_PATCH_DIR}/10_enable_susfs_for_ksu.patch" || true
+          
+          cd ../
+          # Hide Stuff
+          cp ../kernel_patches/69_hide_stuff.patch .
+          patch -p1 -F 3 < 69_hide_stuff.patch || true
+
+    - name: Compute KSU Version
+      run: |
+          cd ${{ env.KERNEL_DIR }}
+          git clone --depth=1 https://github.com/TheSillyOk/sh sh
+          KSU_VER=$(./sh/get_ksuver.sh "KOWX712" "KernelSU" "master")
+          echo "KSUVER=$KSU_VER" >> $GITHUB_ENV
+
+    - name: Apply Clang 22 patch
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+       cp -fv ../kernel_patches/sukisu/fix-clidr-uninitialized.patch ./
+       patch -p1 < fix-clidr-uninitialized.patch
+      
+    - name: Configure kernel
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        CONFIG="${{ env.CONFIG_FILE }}"
+        
+        # Remove ABI exports that could block linking
+        rm -f android/abi_gki_protected_exports_* || true
+        
+        # Core kernel configuration
+        cat >> "$CONFIG" << EOF
+        CONFIG_LOCALVERSION="${{ env.LOCALVERSION }}"
+        CONFIG_LOCALVERSION_AUTO=n
+        CONFIG_KPROBES=y
+        CONFIG_HAVE_KPROBES=y
+        CONFIG_KPROBE_EVENTS=y
+        CONFIG_KSU=y
+        CONFIG_KSU_KPROBES_HOOK=y
+        CONFIG_KSU_DEBUG=n
+        CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
+        CONFIG_KSU_ALLOWLIST_WORKAROUND=n
+        CONFIG_KSU_LSM_SECURITY_HOOKS=y
+        CONFIG_TMPFS_XATTR=y
+        CONFIG_TMPFS_POSIX_ACL=y
+        CONFIG_TCP_CONG_ADVANCED=y
+        CONFIG_TCP_CONG_BBR=y
+        CONFIG_TCP_CONG_CUBIC=y
+        CONFIG_NET_SCH_FQ=y
+        CONFIG_TCP_CONG_BIC=n
+        CONFIG_TCP_CONG_WESTWOOD=n
+        CONFIG_TCP_CONG_HTCP=n
+        CONFIG_IP_NF_TARGET_TTL=y
+        CONFIG_IP6_NF_TARGET_HL=y
+        CONFIG_IP6_NF_MATCH_HL=y
+        CONFIG_IP_SET=y
+        CONFIG_IP_SET_MAX=256
+        CONFIG_IP_SET_BITMAP_IP=y
+        CONFIG_IP_SET_BITMAP_IPMAC=y
+        CONFIG_IP_SET_BITMAP_PORT=y
+        CONFIG_IP_SET_HASH_IP=y
+        CONFIG_IP_SET_HASH_IPPORT=y
+        CONFIG_IP_SET_HASH_IPPORTIP=y
+        CONFIG_IP_SET_HASH_IPPORTNET=y
+        CONFIG_IP_SET_HASH_NET=y
+        CONFIG_IP_SET_HASH_NETNET=y
+        CONFIG_IP_SET_HASH_NETPORT=y
+        CONFIG_IP_SET_HASH_NETIFACE=y
+        CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+        CONFIG_CCACHE=y
+        CONFIG_KSU_SUSFS=y
+        CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=n
+        CONFIG_KSU_SUSFS_SUS_PATH=y
+        CONFIG_KSU_SUSFS_SUS_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_KSTAT=y
+        CONFIG_KSU_SUSFS_TRY_UMOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+        CONFIG_KSU_SUSFS_ENABLE_LOG=y
+        CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+        CONFIG_KSU_SUSFS_SUS_SU=n
+        CONFIG_KSU_SUSFS_SUS_MAP=y
+        EOF
+        
+        # Disable BTF debug info (optional - only if pahole fails)
+        sed -i '/^CONFIG_DEBUG_INFO_BTF/d' "$CONFIG"
+        echo "# CONFIG_DEBUG_INFO_BTF is not set" >> "$CONFIG"
+
+    - name: Prepare build
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion || true
+        sed -i '2s/check_defconfig//' ./build.config.gki 2>/dev/null || true
+        
+        if [ "${{ env.BUILD_CLEAN }}" = "always" ]; then
+          rm -rf ${{ env.OUT_DIR }}
+        fi
+        mkdir -p ${{ env.OUT_DIR }}
+
+    - name: Build kernel
+      env:
+          KBUILD_BUILD_USER: build-user
+          KBUILD_BUILD_HOST: build-host
+      working-directory: ${{ env.KERNEL_DIR }}
+      run: |
+        make -j${{ env.THREADS }} \
+          LLVM_IAS=1 \
+          LLVM=1 \
+          ARCH=arm64 \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
+          CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
+          CC="ccache clang" \
+          KCFLAGS="-fno-stack-protector" \
+          LD=ld.lld \
+          HOSTLD=ld.lld \
+          O="${{ env.OUT_DIR }}" \
+          gki_defconfig all
+
+    - name: Check build output
+      run: |
+        if [ ! -f "${{ env.KERNEL_DIR }}/${{ env.OUT_DIR }}/arch/arm64/boot/Image" ]; then
+          echo "Error: Kernel Image not found!"
+          exit 1
+        fi
+
+    - name: Package kernel
+      run: |
+        IMAGE="${{ env.KERNEL_DIR }}/${{ env.OUT_DIR }}/arch/arm64/boot/Image"
+        cp -fv "$IMAGE" "${{ env.ANYKERNEL_DIR }}"/
+        
+        cd "${{ env.ANYKERNEL_DIR }}"
+        rm -rf .git
+        
+        # Get BUILD version from KernelSU
+        if [ -d "../${{ env.KERNEL_DIR }}/KernelSU/.git" ]; then
+          cd "../${{ env.KERNEL_DIR }}/KernelSU"
+          BUILD_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "1998")
+          BUILD_VER=$((20000 + BUILD_COUNT))
+        else
+          BUILD_VER="22143"
+        fi
+        
+        cd "${{ github.workspace }}/${{ env.ANYKERNEL_DIR }}"
+        
+        # Create timestamp label
+        TIMESTAMP=$(TZ=UTC date -u +"%Y%m%dT%H%MZ")
+        BUILD_LABEL="${TIMESTAMP}-${{ env.GIT_SHORT_SHA }}"
+        ZIP_NAME="${{ env.ZIP_PREFIX }}-${BUILD_VER}.zip"
+        
+        zip -r "../${ZIP_NAME}" ./*
+        
+        mkdir -p "../${{ env.BUILDS_DIR }}"
+        mv "../${ZIP_NAME}" "../${{ env.BUILDS_DIR }}/"
+        
+        echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+        echo "BUILD_VER=${BUILD_VER}" >> $GITHUB_ENV
+
+    - name: Upload kernel artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.ZIP_NAME }}
+        path: ${{ env.BUILDS_DIR }}/${{ env.ZIP_NAME }}
+        retention-days: 30
+
+    - name: Generate build info
+      run: |
+        cd "${{ env.KERNEL_DIR }}"
+        cat > ../build_info.txt << EOF
+        Build Information
+        =================
+        Kernel Version: 6.1.155
+        Build Number: ${{ env.BUILD_VER }}
+        Build Date: $(date -u)
+        Commit SHA: ${{ github.sha }}
+        Short SHA: ${{ env.GIT_SHORT_SHA }}
+        LTO Type: ${{ env.LTO_TYPE }}
+        Pixel 8a Config: ${{ env.PIXEL8A }}
+        
+        Compiler Information
+        ===================
+        Clang Version: $(clang --version | head -n1)
+        
+        Build Configuration
+        ==================
+        KernelSU: Enabled (kowsu-susfs)
+        SuSFS: Enabled
+        Baseband-guard: Enabled
+        BBR TCP: Enabled
+        IPSet: Enabled
+        EOF
+        
+        cat ../build_info.txt
+
+    - name: Upload build info
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-info
+        path: build_info.txt
+        retention-days: 30
+
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ env.BUILDS_DIR }}/${{ env.ZIP_NAME }}
+          build_info.txt
+        body: |
+          ## Kernel Build ${{ github.ref_name }}
+          
+          - **Build Version**: ${{ env.BUILD_VER }}
+          - **Commit**: ${{ github.sha }}
+          - **LTO**: ${{ env.LTO_TYPE }}
+          - **Date**: $(date -u)
+          
+          ### Features
+          - KowSU (kowsu-susfs branch)
+          - SuSFS patches for android14-6.1
+          - Baseband-guard integration
+          - BBR TCP congestion control
+          - IPSet support
+          - Pixel 8a optimizations
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
