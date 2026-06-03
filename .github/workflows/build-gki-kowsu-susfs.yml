@@ -32,7 +32,7 @@ jobs:
     
     steps:
       - name: Checkout Workflow Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Free Disk Space & Install Dependencies
         run: |
@@ -176,7 +176,7 @@ jobs:
           echo "KERNEL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kowsu-kernel
           path: ${{ env.KERNEL_ZIP }}
