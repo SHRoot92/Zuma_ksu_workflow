@@ -326,7 +326,7 @@ jobs:
         sed -i '/^CONFIG_DEBUG_INFO_BTF/d' "$CONFIG"
         echo "# CONFIG_DEBUG_INFO_BTF is not set" >> "$CONFIG"
 
-    - name: Prepare build config (Single Thread)
+    - name: Prepare build
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
         sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion || true
@@ -336,17 +336,10 @@ jobs:
           rm -rf ${{ env.OUT_DIR }}
         fi
         mkdir -p ${{ env.OUT_DIR }}
-        
-        # 核心修复点：单线程下将基础配置与头文件在编译前就彻底处理并写入 out/ 目录
-        make ARCH=arm64 O="${{ env.OUT_DIR }}" gki_defconfig
 
-    - name: Build kernel (Full Multi-Threading)
-      env:
-          KBUILD_BUILD_USER: kleaf
-          KBUILD_BUILD_HOST: build-host
+    - name: Build kernel
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
-        # 核心修复点：配置已就绪，直接全核多线程执行编译，绝不附带 gki_defconfig 目标避免竞态冲突
         make -j${{ env.THREADS }} \
           LLVM_IAS=1 \
           LLVM=1 \
@@ -359,7 +352,7 @@ jobs:
           LD=ld.lld \
           HOSTLD=ld.lld \
           O="${{ env.OUT_DIR }}" \
-          all
+          gki_defconfig all
 
     - name: Check build output
       run: |
