@@ -32,7 +32,7 @@ jobs:
     
     steps:
       - name: Checkout Workflow Repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Free Disk Space & Install Dependencies
         run: |
@@ -41,7 +41,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y bc bison flex libssl-dev libelf-dev build-essential \
             binutils-aarch64-linux-gnu python3 rsync ccache curl zip unzip git \
-            dwarves pahole
+            dwarves pahole aria2c
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -55,11 +55,12 @@ jobs:
 
       - name: Download Toolchains
         run: |
-          # Clang
+          # Clang (使用 aria2c 多线程下载)
           mkdir -p $HOME/clang
           cd $HOME/clang
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
           tar -xzf clang.tar.gz
+          rm clang.tar.gz
           echo "$HOME/clang/bin" >> $GITHUB_PATH
           
           # AArch64 toolchain
@@ -127,8 +128,10 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}"
           
+          # 生成默认配置
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
           
+          # 添加自定义配置
           cat << 'EOF' >> out/.config
           CONFIG_KSU=y
           CONFIG_KSU_DEBUG=n
@@ -136,7 +139,7 @@ jobs:
           CONFIG_LOCALVERSION="-kowsu+"
           EOF
           
-          # 如果启用了 SuSFS，添加相关配置
+          # 根据 SuSFS 开关添加配置
           if [ "${{ inputs.disable_susfs }}" = "false" ]; then
             cat << 'EOF' >> out/.config
           CONFIG_KSU_SUSFS=y
@@ -151,14 +154,29 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
           else
-            # 不启用 SuSFS 时，确保 sucompat 被禁用
+            # 禁用 SuSFS 时，必须禁用 sucompat 避免编译错误
             echo "CONFIG_KSU_SUCOMPAT=n" >> out/.config
           fi
           
+          # 更新配置
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
           
+          # 清理构建（如果需要）
+          if [ "${{ inputs.force_clean_build }}" = "true" ]; then
+            make -j$(nproc) LLVM=1 LLVM_IAS=1 LD=ld.lld O=out clean
+          fi
+          
+          # 编译内核
           MAKE_JOBS=$(nproc)
           make -j$MAKE_JOBS LLVM=1 LLVM_IAS=1 LD=ld.lld O=out Image
+          
+          # 验证编译产物
+          if [ ! -f out/arch/arm64/boot/Image ]; then
+            echo "❌ Kernel Image not found! Build failed."
+            exit 1
+          fi
+          
+          echo "✅ Kernel built successfully!"
 
       - name: Package Kernel
         run: |
@@ -166,27 +184,53 @@ jobs:
           KERNEL_VERSION=$(grep "^VERSION" Makefile | cut -d' ' -f3).$(grep "^PATCHLEVEL" Makefile | cut -d' ' -f3).$(grep "^SUBLEVEL" Makefile | cut -d' ' -f3)
           cd ..
           
+          # Clone AnyKernel3
           git clone --depth=1 --branch=KowSU https://github.com/deepongi-labs/AnyKernel3-p8a AnyKernel3
+          
+          # 复制内核镜像
           cp kernel/out/arch/arm64/boot/Image AnyKernel3/
           
-          cd AnyKernel3 && rm -rf .git
+          # 打包
+          cd AnyKernel3
+          rm -rf .git
           ZIP_NAME="KOWSU-${KERNEL_VERSION}-${{ github.run_number }}.zip"
           zip -r9 "../$ZIP_NAME" .
+          cd ..
           
           echo "KERNEL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+          echo "✅ Packaged: $ZIP_NAME"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: kowsu-kernel
+          name: kowsu-kernel-${{ github.run_number }}
           path: ${{ env.KERNEL_ZIP }}
+          retention-days: 7
 
       - name: Create Release
         if: inputs.create_release == 'true'
         run: |
-          gh release create "kowsu-${{ github.run_number }}" \
+          # 检查是否有 zip 文件
+          if [ ! -f "${{ env.KERNEL_ZIP }}" ]; then
+            echo "❌ No kernel zip found!"
+            exit 1
+          fi
+          
+          # 创建或更新 Release
+          RELEASE_TAG="kowsu-${{ github.run_number }}"
+          RELEASE_NOTES="**Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          
+**Kernel Version:** $(cd kernel && make kernelversion)
+**KOWSU Version:** master
+**SuSFS:** ${{ inputs.disable_susfs == 'true' && 'Disabled' || 'Enabled' }}
+**Clean Build:** ${{ inputs.force_clean_build == 'true' && 'Yes' || 'No' }}
+
+## 📦 Download
+Flash in Kernel Flasher or extract boot.img"
+          
+          gh release create "$RELEASE_TAG" \
             --title "KOWSU Kernel Build #${{ github.run_number }}" \
-            --notes "Build: $(date)\nSuSFS: ${{ inputs.disable_susfs == 'true' && 'Disabled' || 'Enabled' }}" \
-            ${{ env.KERNEL_ZIP }}
+            --notes "$RELEASE_NOTES" \
+            "${{ env.KERNEL_ZIP }}"
         env:
           GH_TOKEN: ${{ github.token }}
