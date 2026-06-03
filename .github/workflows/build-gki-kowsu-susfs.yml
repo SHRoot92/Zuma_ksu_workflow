@@ -32,7 +32,9 @@ jobs:
           remove-browsers: true
           
       - name: Check disk space after cleanup
-        run: df -h /
+        run: |
+         echo "📊 Disk space after cleanup:"
+         df -h
 
       
       - name: Checkout Workflow Repo
