@@ -114,9 +114,9 @@ jobs:
       run: |
         mkdir -p $HOME/clang
         cd $HOME/clang
-        wget https://github.com/greenforce-project/greenforce_clang/releases/download/20260601/gf-clang-23.0.0-20260601.tar.gz -O clang.tar.gz
+        #wget https://github.com/greenforce-project/greenforce_clang/releases/download/20260601/gf-clang-23.0.0-20260601.tar.gz -O clang.tar.gz
         #wget https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
-        #aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
+        aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
         tar -xzf clang.tar.gz
         rm clang.tar.gz
         
