@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KOWSU SuSFS
+name: Build GKI Kernel with KOWSU
 
 on:
   workflow_dispatch:
@@ -12,11 +12,6 @@ on:
         description: 'Force clean build (ignore cache)'
         required: false
         default: false
-        type: boolean
-      enable_telegram:
-        description: 'Enable Telegram notifications'
-        required: false
-        default: true
         type: boolean
       create_release:
         description: 'Create GitHub Release with artifacts'
@@ -36,6 +31,9 @@ jobs:
     timeout-minutes: 180
     
     steps:
+      - name: Checkout Workflow Repo
+        uses: actions/checkout@v4
+
       - name: Free Disk Space & Install Dependencies
         run: |
           sudo apt-get purge -yq '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' || true
@@ -46,7 +44,7 @@ jobs:
             dwarves pahole
 
       - name: Restore ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-kowsu-${{ github.run_id }}
@@ -60,7 +58,7 @@ jobs:
           # Clang
           mkdir -p $HOME/clang
           cd $HOME/clang
-          wget -q https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+          aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
           tar -xzf clang.tar.gz
           echo "$HOME/clang/bin" >> $GITHUB_PATH
           
@@ -87,20 +85,33 @@ jobs:
       - name: Setup SuSFS (optional)
         if: inputs.disable_susfs == 'false'
         run: |
-          git clone --depth=1 --branch=gki-android14-6.1 \
+          # Clone SuSFS
+          git clone --depth=1 --branch=gki-android14-6.1-dev \
             https://gitlab.com/simonpunk/susfs4ksu susfs4ksu
+          
+          # Copy SuSFS core files to kernel
           cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
           cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
           cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
+          
           cd kernel
+          
+          # Apply core SuSFS kernel patch
+          echo "Applying core SuSFS patch..."
           patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          
+          # Apply KSU-side SuSFS patch
+          echo "Applying KSU-side SuSFS patch..."
           cd KernelSU
+          
           if [ -f "../../.github/patches/10_enable_susfs_for_ksu.patch" ]; then
             patch -p1 --forward < "../../.github/patches/10_enable_susfs_for_ksu.patch" || echo "⚠️ Patch may already be applied"
           else
             echo "❌ Patch file not found at .github/patches/10_enable_susfs_for_ksu.patch"
             exit 1
           fi
+          
+          cd ../..
 
       - name: Apply Fixes
         run: |
@@ -120,14 +131,28 @@ jobs:
           
           cat << 'EOF' >> out/.config
           CONFIG_KSU=y
-          CONFIG_KSU_SUCOMPAT=n
           CONFIG_KSU_DEBUG=n
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           CONFIG_LOCALVERSION="-kowsu+"
           EOF
           
+          # 如果启用了 SuSFS，添加相关配置
           if [ "${{ inputs.disable_susfs }}" = "false" ]; then
-            echo "CONFIG_KSU_SUSFS=y" >> out/.config
+            cat << 'EOF' >> out/.config
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+          CONFIG_KSU_SUSFS_SUS_MAP=y
+          EOF
+          else
+            # 不启用 SuSFS 时，确保 sucompat 被禁用
+            echo "CONFIG_KSU_SUCOMPAT=n" >> out/.config
           fi
           
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
@@ -165,13 +190,3 @@ jobs:
             ${{ env.KERNEL_ZIP }}
         env:
           GH_TOKEN: ${{ github.token }}
-
-      - name: Telegram Notification
-        if: inputs.enable_telegram == 'true'
-        run: |
-          STATUS="${{ job.status }}"
-          ICON="${{ job.status == 'success' && '✅' || '❌' }}"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="${ICON} KOWSU Build ${STATUS}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            -d parse_mode="HTML"
