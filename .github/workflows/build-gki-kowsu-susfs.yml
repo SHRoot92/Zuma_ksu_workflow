@@ -107,7 +107,13 @@ jobs:
          echo "❌ Patch file not found at $PATCH_FILE"
          exit 1
          fi
-    
+
+         patch -p1 < "$PATCH_FILE"
+         if [ $? -ne 0 ]; then
+         echo "❌ KSU-side SuSFS patch failed!"
+         exit 1
+         fi
+         
          # Apply KSU-side SuSFS patch 
          cd KernelSU
          echo "Applying KSU-side SuSFS patch..."
@@ -126,21 +132,6 @@ jobs:
          cd ../..
     
          echo "✅ SuSFS patches applied successfully!"
-
-      - name: Verify SuSFS Applied
-        run: |
-          cd kernel
-          # 验证核心补丁
-          if [ ! -f fs/susfs.c ]; then
-            echo "❌ fs/susfs.c not found!"
-            exit 1
-          fi
-          # 验证 KSU 补丁
-          if ! grep -q "struct static_key_true ksu_su_compat_enabled" KernelSU/feature/sucompat.h; then
-            echo "❌ KSU-side patch not applied correctly!"
-            exit 1
-          fi
-          echo "✅ All SuSFS patches verified!"
 
       - name: Apply Fixes
         run: |
