@@ -93,13 +93,13 @@ jobs:
     
          # Apply core SuSFS kernel patch
          echo "Applying core SuSFS patch..."
-         patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch
-         if [ $? -ne 0 ]; then
-         echo "❌ Core SuSFS patch failed!"
+         PATCH_FILE="${{ github.workspace }}/.github/patches/50_add_susfs_in_gki-android14-6.1.patch"
+         if [ ! -f "$PATCH_FILE" ]; then
+         echo "❌ Patch file not found at $PATCH_FILE"
          exit 1
          fi
     
-         # Apply KSU-side SuSFS patch (在 KernelSU 目录内)
+         # Apply KSU-side SuSFS patch 
          cd KernelSU
          echo "Applying KSU-side SuSFS patch..."
          PATCH_FILE="${{ github.workspace }}/.github/patches/10_enable_susfs_for_ksu.patch"
