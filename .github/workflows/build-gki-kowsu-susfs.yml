@@ -3,11 +3,6 @@ name: Build GKI Kernel with KowSU SuSFS
 on:
   workflow_dispatch:
     inputs:
-      disable_susfs:
-        description: 'Disable SuSFS features'
-        required: false
-        default: false
-        type: boolean
       force_clean_build:
         description: 'Force clean build (ignore cache)'
         required: false
@@ -41,7 +36,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y bc bison flex libssl-dev libelf-dev build-essential \
             binutils-aarch64-linux-gnu python3 rsync ccache curl zip unzip git \
-            dwarves pahole
+            dwarves pahole aria2c
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -55,7 +50,7 @@ jobs:
 
       - name: Download Toolchains
         run: |
-          # Clang (使用 aria2c 多线程下载)
+          # Clang
           mkdir -p $HOME/clang
           cd $HOME/clang
           aria2c -s16 -x16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" -o clang.tar.gz
@@ -83,7 +78,7 @@ jobs:
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
           grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
-      - name: Setup SuSFS (optional)
+      - name: Setup SuSFS
         run: |
           # Clone SuSFS
           git clone --depth=1 --branch=gki-android14-6.1-dev \
@@ -98,20 +93,43 @@ jobs:
           
           # Apply core SuSFS kernel patch
           echo "Applying core SuSFS patch..."
-          patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          patch -p1 < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch
+          if [ $? -ne 0 ]; then
+            echo "❌ Core SuSFS patch failed!"
+            exit 1
+          fi
           
-          # Apply KSU-side SuSFS patch
+          # Apply KSU-side SuSFS patch (在 kernel 目录下执行，不是在 KernelSU 目录)
           echo "Applying KSU-side SuSFS patch..."
-          cd KernelSU
-          
-          if [ -f "../../.github/patches/10_enable_susfs_for_ksu.patch" ]; then
-            patch -p1 --forward < "../../.github/patches/10_enable_susfs_for_ksu.patch" || echo "⚠️ Patch may already be applied"
-          else
+          if [ ! -f "../.github/patches/10_enable_susfs_for_ksu.patch" ]; then
             echo "❌ Patch file not found at .github/patches/10_enable_susfs_for_ksu.patch"
             exit 1
           fi
           
-          cd ../..
+          patch -p1 < "../.github/patches/10_enable_susfs_for_ksu.patch"
+          if [ $? -ne 0 ]; then
+            echo "❌ KSU-side SuSFS patch failed!"
+            exit 1
+          fi
+          
+          cd ..
+          
+          echo "✅ SuSFS patches applied successfully!"
+
+      - name: Verify SuSFS Applied
+        run: |
+          cd kernel
+          # 验证核心补丁
+          if [ ! -f fs/susfs.c ]; then
+            echo "❌ fs/susfs.c not found!"
+            exit 1
+          fi
+          # 验证 KSU 补丁
+          if ! grep -q "struct static_key_true ksu_su_compat_enabled" KernelSU/feature/sucompat.h; then
+            echo "❌ KSU-side patch not applied correctly!"
+            exit 1
+          fi
+          echo "✅ All SuSFS patches verified!"
 
       - name: Apply Fixes
         run: |
@@ -130,17 +148,12 @@ jobs:
           # 生成默认配置
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
           
-          # 添加自定义配置
+          # 添加自定义配置（强制启用 SuSFS）
           cat << 'EOF' >> out/.config
           CONFIG_KSU=y
           CONFIG_KSU_DEBUG=n
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           CONFIG_LOCALVERSION="-kowsu+"
-          EOF
-          
-          # 根据 SuSFS 开关添加配置
-          if [ "${{ inputs.disable_susfs }}" = "false" ]; then
-            cat << 'EOF' >> out/.config
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
           CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -152,10 +165,6 @@ jobs:
           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
-          else
-            # 禁用 SuSFS 时，必须禁用 sucompat 避免编译错误
-            echo "CONFIG_KSU_SUCOMPAT=n" >> out/.config
-          fi
           
           # 更新配置
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
@@ -209,23 +218,21 @@ jobs:
       - name: Create Release
         if: inputs.create_release == 'true'
         run: |
-          # 检查是否有 zip 文件
           if [ ! -f "${{ env.KERNEL_ZIP }}" ]; then
             echo "❌ No kernel zip found!"
             exit 1
           fi
           
-          # 创建或更新 Release
           RELEASE_TAG="kowsu-${{ github.run_number }}"
           RELEASE_NOTES="**Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
           
-          **Kernel Version:** $(cd kernel && make kernelversion)
-          **KOWSU Version:** master
-          **SuSFS:** ${{ inputs.disable_susfs == 'true' && 'Disabled' || 'Enabled' }}
-          **Clean Build:** ${{ inputs.force_clean_build == 'true' && 'Yes' || 'No' }}
+**Kernel Version:** $(cd kernel && make kernelversion)
+**KOWSU Version:** master
+**SuSFS:** Enabled
+**Clean Build:** ${{ inputs.force_clean_build == 'true' && 'Yes' || 'No' }}
 
-          ## 📦 Download
-          Flash in Kernel Flasher or extract boot.img"
+## 📦 Download
+Flash in Kernel Flasher or extract boot.img"
           
           gh release create "$RELEASE_TAG" \
             --title "KOWSU Kernel Build #${{ github.run_number }}" \
