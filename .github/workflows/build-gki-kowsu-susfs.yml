@@ -144,15 +144,14 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}"
           
-          # 生成默认配置
+          
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
           
-          # 添加自定义配置（强制启用 SuSFS）
+          
           cat << 'EOF' >> out/.config
           CONFIG_KSU=y
           CONFIG_KSU_DEBUG=n
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
-          CONFIG_LOCALVERSION="-kowsu+"
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
           CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -165,19 +164,19 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
           
-          # 更新配置
+          
           make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
           
-          # 清理构建（如果需要）
+          
           if [ "${{ inputs.force_clean_build }}" = "true" ]; then
             make -j$(nproc) LLVM=1 LLVM_IAS=1 LD=ld.lld O=out clean
           fi
           
-          # 编译内核
+          
           MAKE_JOBS=$(nproc)
           make -j$MAKE_JOBS LLVM=1 LLVM_IAS=1 LD=ld.lld O=out Image
           
-          # 验证编译产物
+          
           if [ ! -f out/arch/arm64/boot/Image ]; then
             echo "❌ Kernel Image not found! Build failed."
             exit 1
