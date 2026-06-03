@@ -38,6 +38,7 @@ env:
   BUILDS_DIR: builds/6.1.162
   LOCALVERSION:
   
+  # 统一控制 Arm 官方工具链版本
   GCC_VERSION: "14.2.rel1"
   
   # Compiler configuration
@@ -60,7 +61,7 @@ jobs:
           
     - name: Download Apache Arrow's util_free_space.sh
       run: |
-          curl -L -o util_free_space.sh https://raw.githubusercontent.com/apache/arrow/refs/heads/main/ci/scripts/util_free_space.sh
+          curl -L -o util_free_space.sh https://raw.githubusercontent.com/yapixel/kernel_patches/refs/heads/dev/util_free_space.sh
           chmod +x util_free_space.sh
           ./util_free_space.sh
           
@@ -161,7 +162,7 @@ jobs:
         
         # Clone AnyKernel3
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.ANYKERNEL_BRANCH }} \
-          https://github.com/yapixel/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
+          https://github.com/deepongi-labs/${{ env.ANYKERNEL_DIR }} ${{ env.ANYKERNEL_DIR }}
         
         # Clone kernel patches
         git clone --depth=${{ env.REPO_DEPTH }} -b ${{ env.PATCHES_BRANCH }} ${{ env.PATCHES_REPO }} kernel_patches
@@ -223,22 +224,23 @@ jobs:
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
           echo "Copying patches from local workspace..."
-          
+          # 本地相对路径：由于处于 common 目录中，本地工作区根目录为 ../
           LOCAL_PATCH_DIR="../.github/patches/kowsu"
           
           echo "Applying SUSFS patches to kernel side..."
           cp -r ../susfs4ksu/kernel_patches/fs/* ./fs/
           cp -r ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
           
-          patch  -p1 < "${LOCAL_PATCH_DIR}/50_add_susfs_in_gki-android14-6.1.patch" || true
-         
+          patch --fuzz=10 -p1 < "${LOCAL_PATCH_DIR}/0001-50_add_susfs_to_kernelside_KOWX712.patch" || true
+          rm -f fs/proc/base.c.rej fs/proc/base.c.orig
+          
           cd KernelSU
           echo "Applying KSU side patch..."
           patch -p1 < "../${LOCAL_PATCH_DIR}/10_enable_susfs_for_ksu.patch" || true
           
           cd ../
           # Hide Stuff
-          cp ../kernel_patches/archived/69_hide_stuff.patch .
+          cp ../kernel_patches/69_hide_stuff.patch .
           patch -p1 -F 3 < 69_hide_stuff.patch || true
 
     - name: Compute KSU Version
@@ -324,7 +326,7 @@ jobs:
         sed -i '/^CONFIG_DEBUG_INFO_BTF/d' "$CONFIG"
         echo "# CONFIG_DEBUG_INFO_BTF is not set" >> "$CONFIG"
 
-    - name: Prepare build
+    - name: Prepare build config (Single Thread)
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
         sed -i '/# Check for uncommitted changes\./,/fi/d' ./scripts/setlocalversion || true
@@ -334,13 +336,17 @@ jobs:
           rm -rf ${{ env.OUT_DIR }}
         fi
         mkdir -p ${{ env.OUT_DIR }}
+        
+        # 核心修复点：单线程下将基础配置与头文件在编译前就彻底处理并写入 out/ 目录
+        make ARCH=arm64 O="${{ env.OUT_DIR }}" gki_defconfig
 
-    - name: Build kernel
+    - name: Build kernel (Full Multi-Threading)
       env:
-          KBUILD_BUILD_USER: build-user
+          KBUILD_BUILD_USER: kleaf
           KBUILD_BUILD_HOST: build-host
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
+        # 核心修复点：配置已就绪，直接全核多线程执行编译，绝不附带 gki_defconfig 目标避免竞态冲突
         make -j${{ env.THREADS }} \
           LLVM_IAS=1 \
           LLVM=1 \
@@ -353,7 +359,7 @@ jobs:
           LD=ld.lld \
           HOSTLD=ld.lld \
           O="${{ env.OUT_DIR }}" \
-          gki_defconfig all
+          all
 
     - name: Check build output
       run: |
@@ -413,7 +419,7 @@ jobs:
         Commit SHA: ${{ github.sha }}
         Short SHA: ${{ env.GIT_SHORT_SHA }}
         LTO Type: ${{ env.LTO_TYPE }}
-        Pixel 7 Config: ${{ env.PIXEL8A }}
+        Pixel 8a Config: ${{ env.PIXEL8A }}
         
         Compiler Information
         ===================
