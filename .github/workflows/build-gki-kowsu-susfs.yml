@@ -226,13 +226,13 @@ jobs:
           RELEASE_TAG="kowsu-${{ github.run_number }}"
           RELEASE_NOTES="**Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
           
-**Kernel Version:** $(cd kernel && make kernelversion)
-**KOWSU Version:** master
-**SuSFS:** Enabled
-**Clean Build:** ${{ inputs.force_clean_build == 'true' && 'Yes' || 'No' }}
+          **Kernel Version:** $(cd kernel && make kernelversion)
+          **KOWSU Version:** master
+          **SuSFS:** Enabled
+          **Clean Build:** ${{ inputs.force_clean_build == 'true' && 'Yes' || 'No' }}
 
-## 📦 Download
-Flash in Kernel Flasher or extract boot.img"
+          ## 📦 Download
+          Flash in Kernel Flasher or extract boot.img"
           
           gh release create "$RELEASE_TAG" \
             --title "KOWSU Kernel Build #${{ github.run_number }}" \
