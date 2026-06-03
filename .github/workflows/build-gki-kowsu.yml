@@ -178,7 +178,7 @@ jobs:
       run: |
         CONFIG="${{ env.CONFIG_FILE }}"
         
-        # Add Pixel 8a specific configurations
+        # Add Pixel 7 specific configurations
         cat >> "$CONFIG" << EOF
         CONFIG_ARM64_CORTEX_X3=y
         CONFIG_ARM64_CORTEX_A715=y
@@ -340,19 +340,20 @@ jobs:
     - name: Build kernel
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
-        make -j${{ env.THREADS }} \
-          LLVM_IAS=1 \
-          LLVM=1 \
-          ARCH=arm64 \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
-          CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
-          CC="ccache clang" \
-          KCFLAGS="-fno-stack-protector" \
-          LD=ld.lld \
-          HOSTLD=ld.lld \
-          O="${{ env.OUT_DIR }}" \
-          gki_defconfig all
+          if [ "${{ env.BUILD_CLEAN }}" = "always" ]; then rm -rf ${{ env.OUT_DIR }}; fi
+          mkdir -p ${{ env.OUT_DIR }}
+
+          make -j${{ env.THREADS }} \
+            LLVM=1 LLVM_IAS=1 ARCH=arm64 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
+            CROSS_COMPILE_COMPAT="${{ env.ARM32_TOOLCHAIN }}" \
+            CC="ccache clang" LD=ld.lld HOSTLD=ld.lld \
+            KCFLAGS="-fno-stack-protector" \
+            O="${{ env.OUT_DIR }}" gki_defconfig all
+
+          make -j${{ env.THREADS }} \
+            LLVM=1 LLVM_IAS=1 ARCH=arm64 O="${{ env.OUT_DIR }}" modules
 
     - name: Check build output
       run: |
