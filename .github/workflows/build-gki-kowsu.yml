@@ -238,7 +238,7 @@ jobs:
           
           cd ../
           # Hide Stuff
-          cp ../kernel_patches/69_hide_stuff.patch .
+          cp ../kernel_patches/archived/69_hide_stuff.patch .
           patch -p1 -F 3 < 69_hide_stuff.patch || true
 
     - name: Compute KSU Version
@@ -413,7 +413,7 @@ jobs:
         Commit SHA: ${{ github.sha }}
         Short SHA: ${{ env.GIT_SHORT_SHA }}
         LTO Type: ${{ env.LTO_TYPE }}
-        Pixel 8a Config: ${{ env.PIXEL8A }}
+        Pixel 7 Config: ${{ env.PIXEL8A }}
         
         Compiler Information
         ===================
