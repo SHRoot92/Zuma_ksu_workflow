@@ -343,7 +343,7 @@ jobs:
           if [ "${{ env.BUILD_CLEAN }}" = "always" ]; then rm -rf ${{ env.OUT_DIR }}; fi
           mkdir -p ${{ env.OUT_DIR }}
 
-          make -j${{ env.THREADS }} \
+          make -j"$(nproc --all)" \
             LLVM=1 LLVM_IAS=1 ARCH=arm64 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}" \
@@ -352,7 +352,7 @@ jobs:
             KCFLAGS="-fno-stack-protector" \
             O="${{ env.OUT_DIR }}" gki_defconfig all
 
-          make -j${{ env.THREADS }} \
+          make -j"$(nproc --all)" \
             LLVM=1 LLVM_IAS=1 ARCH=arm64 O="${{ env.OUT_DIR }}" modules
 
     - name: Check build output
