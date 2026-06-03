@@ -1,0 +1,172 @@
+name: Build GKI Kernel with KOWSU SuSFS
+
+on:
+  workflow_dispatch:
+    inputs:
+      disable_susfs:
+        description: 'Disable SuSFS features'
+        required: false
+        default: false
+        type: boolean
+      force_clean_build:
+        description: 'Force clean build (ignore cache)'
+        required: false
+        default: false
+        type: boolean
+      enable_telegram:
+        description: 'Enable Telegram notifications'
+        required: false
+        default: true
+        type: boolean
+      create_release:
+        description: 'Create GitHub Release with artifacts'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    
+    steps:
+      - name: Free Disk Space & Install Dependencies
+        run: |
+          sudo apt-get purge -yq '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update -qq
+          sudo apt-get install -y bc bison flex libssl-dev libelf-dev build-essential \
+            binutils-aarch64-linux-gnu python3 rsync ccache curl zip unzip git \
+            dwarves pahole
+
+      - name: Restore ccache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-kowsu-${{ github.run_id }}
+          restore-keys: ccache-kowsu-
+
+      - name: Setup ccache
+        run: ccache --max-size=5G
+
+      - name: Download Toolchains
+        run: |
+          # Clang
+          mkdir -p $HOME/clang
+          cd $HOME/clang
+          wget -q https://github.com/ZyCromerZ/Clang/releases/download/22.0.0git-20250928-release/Clang-22.0.0git-20250928.tar.gz -O clang.tar.gz
+          tar -xzf clang.tar.gz
+          echo "$HOME/clang/bin" >> $GITHUB_PATH
+          
+          # AArch64 toolchain
+          cd $HOME
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+          tar -xJf arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+          echo "ARM64_TOOLCHAIN=$HOME/arm-gnu-toolchain-14.3.rel1-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
+
+      - name: Sync Kernel Source
+        run: |
+          git clone --depth=1 --branch=android14-6.1-2026-03 \
+            https://android.googlesource.com/kernel/common kernel
+
+      - name: Setup KOWSU
+        run: |
+          cd kernel
+          rm -rf KernelSU drivers/kernelsu
+          git clone --depth=1 --branch=master https://github.com/KOWX712/KernelSU.git KernelSU
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+      - name: Setup SuSFS (optional)
+        if: inputs.disable_susfs == 'false'
+        run: |
+          git clone --depth=1 --branch=gki-android14-6.1 \
+            https://gitlab.com/simonpunk/susfs4ksu susfs4ksu
+          cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
+          cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
+          cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
+          cd kernel
+          patch -p1 --forward < ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch || true
+          cd KernelSU
+          patch -p1 --forward < ../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+
+      - name: Apply Fixes
+        run: |
+          cd kernel
+          # Remove ABI checks
+          rm -f android/abi_gki_protected_exports_* || true
+          # Fix clidr
+          curl -s https://raw.githubusercontent.com/infectedmushi/kernel_patches/main/fix-clidr-uninitialized.patch | patch -p1 --forward || true
+
+      - name: Configure & Build Kernel
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export CROSS_COMPILE="${{ env.ARM64_TOOLCHAIN }}"
+          
+          make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out gki_defconfig
+          
+          cat << 'EOF' >> out/.config
+          CONFIG_KSU=y
+          CONFIG_KSU_SUCOMPAT=n
+          CONFIG_KSU_DEBUG=n
+          CONFIG_KSU_LSM_SECURITY_HOOKS=y
+          CONFIG_LOCALVERSION="-kowsu+"
+          EOF
+          
+          if [ "${{ inputs.disable_susfs }}" = "false" ]; then
+            echo "CONFIG_KSU_SUSFS=y" >> out/.config
+          fi
+          
+          make LLVM=1 LLVM_IAS=1 LD=ld.lld O=out olddefconfig
+          
+          MAKE_JOBS=$(nproc)
+          make -j$MAKE_JOBS LLVM=1 LLVM_IAS=1 LD=ld.lld O=out Image
+
+      - name: Package Kernel
+        run: |
+          cd kernel
+          KERNEL_VERSION=$(grep "^VERSION" Makefile | cut -d' ' -f3).$(grep "^PATCHLEVEL" Makefile | cut -d' ' -f3).$(grep "^SUBLEVEL" Makefile | cut -d' ' -f3)
+          cd ..
+          
+          git clone --depth=1 --branch=KowSU https://github.com/deepongi-labs/AnyKernel3-p8a AnyKernel3
+          cp kernel/out/arch/arm64/boot/Image AnyKernel3/
+          
+          cd AnyKernel3 && rm -rf .git
+          ZIP_NAME="KOWSU-${KERNEL_VERSION}-${{ github.run_number }}.zip"
+          zip -r9 "../$ZIP_NAME" .
+          
+          echo "KERNEL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kowsu-kernel
+          path: ${{ env.KERNEL_ZIP }}
+
+      - name: Create Release
+        if: inputs.create_release == 'true'
+        run: |
+          gh release create "kowsu-${{ github.run_number }}" \
+            --title "KOWSU Kernel Build #${{ github.run_number }}" \
+            --notes "Build: $(date)\nSuSFS: ${{ inputs.disable_susfs == 'true' && 'Disabled' || 'Enabled' }}" \
+            ${{ env.KERNEL_ZIP }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Telegram Notification
+        if: inputs.enable_telegram == 'true'
+        run: |
+          STATUS="${{ job.status }}"
+          ICON="${{ job.status == 'success' && '✅' || '❌' }}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="${ICON} KOWSU Build ${STATUS}\nRun: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -d parse_mode="HTML"
