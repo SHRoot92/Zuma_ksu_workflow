@@ -49,7 +49,7 @@ jobs:
 
           echo "Downloading GKI source..."
           aria2c -s16 -x16 -k1M \
-            "https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-android14-6.1-2026-03_r14/common-android14-6.1-2026-03_r14.tar.gz" \
+            "https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-android14-6.1-2026-03_r13/common-android14-6.1-2026-03_r13.tar.gz" \
             -o common.tar.gz
 
           mkdir -p common
