@@ -150,48 +150,27 @@ jobs:
 
       - name: Build kernel
         run: |
-          WORKDIR="$(pwd)"
+         WORKDIR="$(pwd)"
+         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+         export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
+    
+         cd kernel_workspace/common
+    
+    
+         ROOT_REAL_PATH=$(readlink -f "$PWD")
+         export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+    
+         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+         export KBUILD_GENDWARFKSYMS_STABLE=1
+    
+         make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
+         make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
 
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
-          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
+         echo "Kernel build completed."
 
-          CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
-
-          echo "Compiler information:"
-          echo "Clang version: $($CLANG_DIR/clang --version | head -n 1)"
-          echo "LLD version: $($CLANG_DIR/ld.lld --version | head -n 1)"
-
-          pahole_version=$(pahole --version 2>/dev/null | head -n1 || true)
-          [ -z "$pahole_version" ] && echo "pahole version: not installed" || echo "pahole version: $pahole_version"
-
-          cd kernel_workspace/common
-
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
-
-          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-          export KBUILD_GENDWARFKSYMS_STABLE=1
-
-          make -j$(nproc) \
-          LLVM=1 \
-          ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          O=out \
-          KCFLAGS="-Wno-error -O2" \
-          gki_defconfig
-
-
-          make -j$(nproc) \
-          LLVM=1 \
-          ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-gnu- \
-          O=out \
-          Image
-
-          echo "Kernel build completed."
-
-          df -h
+         df -h
 
       - name: Clone AnyKernel3 and package kernel
         run: |
