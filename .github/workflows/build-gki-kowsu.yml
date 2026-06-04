@@ -241,7 +241,7 @@ jobs:
 
         echo "Apply KSU integration patches"   
         
-        patch -p1 < ../../.github/patches/kowsu/enable_susfs_for_kowsu.patch
+        patch -p1 < ../../.github/patches/kowsu/10_enable_susfs_for_ksu.patch
 
 
     - name: Configure kernel
