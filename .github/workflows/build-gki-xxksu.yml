@@ -171,28 +171,23 @@ jobs:
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
 
-          make -j$(nproc --all) \
-            LLVM=1 \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="clang" \
-            LD="ld.lld" \
-            HOSTLD=ld.lld \
-            O=out \
-            KCFLAGS="-O2 -w" \
-            gki_defconfig
+          make -j$(nproc) \
+          LLVM=1 \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          O=out \
+          KCFLAGS="-Wno-error -O2" \
+          gki_defconfig
 
-          make -j$(nproc --all) \
-            LLVM=1 \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="clang" \
-            LD="ld.lld" \
-            HOSTLD=ld.lld \
-            O=out \
-            KCFLAGS="-O2 -w" \
-            Image
+
+          make -j$(nproc) \
+          LLVM=1 \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          O=out \
+          Image
 
           echo "Kernel build completed."
 
