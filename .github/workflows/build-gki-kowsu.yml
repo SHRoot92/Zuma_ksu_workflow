@@ -14,8 +14,8 @@ jobs:
       VARIANT: "MidoriSU"
       KERNEL_VERSION: "6.1"
       # 以下为自动规范化的编译元数据
-      BUILD_USER: "build-user"
-      BUILD_HOST: "build-host"
+      BUILD_USER: "deepongi"
+      BUILD_HOST: "GKI-Builder"
       BUILD_EPOCH: "1711843200"
       BUILD_TIMESTAMP: "Sun Mar 31 00:00:00 UTC 2024"
       KERNEL_LOCALVERSION: "-MidoriSU"
@@ -91,6 +91,8 @@ jobs:
         run: |
           mkdir -p kernel_workspace && cd kernel_workspace
           
+          # 从 AOSP 官方拉取对应的 prebuilts 工具链
+          # 这里使用了稳定分支或已知可用的 tag 来获取工具，确保可以独立运行
           CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r485501b.tar.gz"
           BTOOLS_URL="https://android.googlesource.com/platform/prebuilts/build-tools/+archive/refs/heads/main/linux-x86.tar.gz"
           KERNEL_BASE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1.tar.gz"
@@ -194,6 +196,10 @@ jobs:
         working-directory: kernel_workspace/common
         run: |
           WORK_DIR="${{ github.workspace }}/kernel_workspace"
+          
+          # 【核心修复】：删除 Google build-tools 里带毒的 bison 和 flex 强制内核去寻找系统自带的
+          rm -f "${WORK_DIR}/build-tools/bin/bison" "${WORK_DIR}/build-tools/bin/flex" "${WORK_DIR}/build-tools/bin/m4" || true
+          
           export PATH="${WORK_DIR}/clang/bin:${WORK_DIR}/build-tools/bin:${PATH}"
           
           if [ -d "${{ github.workspace }}/.ccache-bin" ]; then
@@ -212,7 +218,20 @@ jobs:
           make -j$(nproc) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
           [ "${{ env.USE_CCACHE }}" = "true" ] && ccache -s
 
-      
+      - name: Export vmlinux for eBPF
+        if: env.BUILD_EBPF == 'true'
+        working-directory: kernel_workspace/common/out
+        run: |
+          [ -f "vmlinux" ] && zstd -T0 -10 vmlinux -o vmlinux.zst || true
+
+      - name: Upload vmlinux Artifact
+        if: env.BUILD_EBPF == 'true' && hashFiles('kernel_workspace/common/out/vmlinux.zst')
+        uses: actions/upload-artifact@v4
+        with:
+          name: vmlinux-6.1-MidoriSU${{ env.SUSFS_SUFFIX }}
+          path: kernel_workspace/common/out/vmlinux.zst
+          retention-days: 1
+
       - name: Package Kernel
         working-directory: kernel_workspace
         run: |
