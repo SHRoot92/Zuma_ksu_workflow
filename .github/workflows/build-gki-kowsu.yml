@@ -160,7 +160,8 @@ jobs:
       run: |
         #git clone --depth=1 https://android.googlesource.com/kernel/common -b ${{ env.KERNEL_TAG }}  ${{ env.KERNEL_DIR }}
         aria2c -s16 -x16 -k1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r14.tar.gz" -o common.tar.gz
-        mkdir -p common && tar -xzf common.tar.gz -C common && rm common.tar.gz
+        mkdir -p common && tar -xzf common.tar.gz -C common --strip-components=1 && rm common.tar.gz
+       
          
 
     - name: Setup repositories
@@ -251,6 +252,7 @@ jobs:
     - name: Configure kernel
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
+      
         CONFIG="${{ env.CONFIG_FILE }}"
         
         # Remove ABI exports that could block linking
