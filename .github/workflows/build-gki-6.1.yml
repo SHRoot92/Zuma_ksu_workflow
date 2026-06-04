@@ -1,0 +1,296 @@
+name: Build and Release - Kernel 6.1 Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_mirror:
+        description: 'Kernel Source'
+        required: true
+        default: 'midori'
+        type: choice
+        options:
+          - google
+          - midori
+      ksu_variant:
+        description: 'KernelSU Variant'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - KowSU
+          - xxKSU
+      kowsu_branch:
+        description: 'KowSU Source'
+        required: true
+        default: 'KOWX712/KernelSU:master'
+        type: choice
+        options:
+          - 'KOWX712/KernelSU:master'
+          
+      xxksu_branch:
+        description: 'XXKSU Source'
+        required: true
+        default: 'backslashxx/KernelSU:master'
+        type: choice
+        options:
+          - 'backslashxx/KernelSU:master'
+          - 'backslashxx/KernelSU:staging'
+      use_ccache:
+        description: 'Ccache Speedup'
+        required: true
+        default: true
+        type: boolean
+      enable_susfs:
+        description: 'SUSFS'
+        required: true
+        default: true
+        type: boolean
+      susfs_commit:
+        description: 'SUSFS Commit (Leave blank for latest)'
+        required: false
+        default: ''
+        type: string
+      hook_mode:
+        description: "XXKSU Hook Mode"
+        required: true
+        default: "manual"
+        type: choice
+        options:
+          - manual
+          - hookless
+      kernel_localversion:
+        description: 'Spoof Kernel Name'
+        required: true
+        default: '-gki-midori-build'
+        type: string
+      build_timestamp:
+        description: 'Spoof Build Time'
+        required: true
+        default: 'Mon Feb 02 02:02:02 JST 2026'
+        type: string
+      build_user:
+        description: 'Spoof Build User'
+        required: true
+        default: 'midori'
+        type: string
+      build_host:
+        description: 'Spoof Build Host'
+        required: true
+        default: 'build-host'
+        type: string
+      build_epoch:
+        description: 'SOURCE_DATE_EPOCH'
+        required: true
+        default: '1764155774'
+        type: string
+      release_type:
+        description: 'Release Type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - pre-release
+          - no-release
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.config.outputs.release_tag }}
+      build_matrix: ${{ steps.config.outputs.build_matrix }}
+      metadata: ${{ steps.config.outputs.metadata }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - id: config
+        name: Prepare build matrix and metadata
+        run: |
+          echo "release_tag=$(TZ='Asia/Tokyo' date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+          config_file=".github/config/kernel_versions.json"
+
+          kv="6.1"
+          
+          rm -f /tmp/metadata.json
+          config=$(jq -c '.["6.1"]' "$config_file")
+          android_version=$(echo "$config" | jq -r '.android_version')
+          sub_level=$(echo "$config" | jq -r '.default_sub_level')
+          revision=$(echo "$config" | jq -c '.revisions["'$sub_level'"]')
+          asb_date=$(echo "$revision" | jq -r '.asb_date')
+          r_version=$(echo "$revision" | jq -r '.default_r')
+          r_suffix=$([ "$r_version" != "none" ] && echo "_$r_version" || echo '')
+          clang_version=$(echo "$config" | jq -r '.default_clang')
+          rust=$(echo "$config" | jq -r '.rust')
+          [ "$rust" = "true" ] && rust_version=$(echo "$config" | jq -r '.default_rust') || rust_version=""
+          mirror_tag=$(echo "$config" | jq -r '.mirror_tag')
+          anykernel_branch=$(echo "$config" | jq -r '.anykernel_branch')
+          google_ref=$([ "$r_version" = "none" ] && echo "heads" || echo "tags")
+          if [ "${{ inputs.source_mirror }}" = "google" ]; then
+            source_url="https://android.googlesource.com/kernel/common/+archive/refs/$google_ref"
+            mirror_name="Google"
+          else
+            source_url="https://github.com/${{ github.repository }}/releases/download/$mirror_tag"
+            mirror_name="GitHub"
+          fi
+
+          jq -n \
+            --arg kv "$kv" \
+            --arg android_version "$android_version" \
+            --arg sub_level "$sub_level" \
+            --arg asb_date "$asb_date" \
+            --arg r_version "$r_version" \
+            --arg r_suffix "$r_suffix" \
+            --arg clang_version "$clang_version" \
+            --arg rust_version "$rust_version" \
+            --arg source_url "$source_url" \
+            --arg mirror_name "$mirror_name" \
+            --arg anykernel_branch "$anykernel_branch" \
+            '{kernel_version:$kv,android_version:$android_version,sub_level:$sub_level,asb_date:$asb_date,r_version:$r_version,r_suffix:$r_suffix,clang_version:$clang_version,rust_version:$rust_version,source_base_url:$source_url,mirror_name:$mirror_name,anykernel_branch:$anykernel_branch}' > /tmp/metadata.json
+
+          matrix='{"include":[]}'
+          variant="${{ inputs.ksu_variant }}"
+          
+          add_variant() {
+            local v=$1 has_susfs=$2
+            local sus="false"
+            [ "$has_susfs" = "true" ] && [ "${{ inputs.enable_susfs }}" = "true" ] && sus="true"
+            matrix=$(echo "$matrix" | jq -c --arg kv "$kv" --arg variant "$v" --argjson sus "$sus" '.include += [{"kernel_version":$kv,"variant":$variant,"susfs":$sus}]')
+          }
+
+          [[ "$variant" =~ ^(all|KOWSU)$ ]] && add_variant KOWSU true
+          [[ "$variant" =~ ^(all|XXKSU)$ ]] && add_variant XXKSU true
+
+          echo "metadata=$(jq -sc '.' /tmp/metadata.json)" >> $GITHUB_OUTPUT
+          echo "build_matrix=$matrix" >> $GITHUB_OUTPUT
+
+  build:
+    name: "${{ matrix.kernel_version }} - ${{ matrix.variant }}${{ matrix.susfs && ' (SUSFS)' || '' }}"
+    needs: setup
+    if: needs.setup.outputs.build_matrix != '{"include":[]}'
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.build_matrix) }}
+    uses: ./.github/workflows/build-kernel.yml
+    with:
+      kernel_version: ${{ matrix.kernel_version }}
+      variant: ${{ matrix.variant }}
+      use_droidspaces: false
+      use_susfs: ${{ matrix.susfs }}
+      source_mirror: ${{ inputs.source_mirror }}
+      use_ccache: ${{ inputs.use_ccache }}
+      susfs_commit: ${{ inputs.susfs_commit }}
+      build_ebpf: false
+      kernel_localversion: ${{ inputs.kernel_localversion }}
+      build_epoch: ${{ inputs.build_epoch }}
+      build_timestamp: ${{ inputs.build_timestamp }}
+      build_user: ${{ inputs.build_user }}
+      build_host: ${{ inputs.build_host }}
+      kowsu_branch: ${{ inputs.kowsu_branch }}
+      xxksu_branch: ${{ inputs.xxksu_branch }}
+      hook_mode: ${{ inputs.hook_mode }}
+
+  release:
+    needs: [setup, build]
+    if: |
+      always() &&
+      inputs.release_type != 'no-release' &&
+      needs.setup.result == 'success' &&
+      needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Load metadata for 6.1
+        id: meta
+        run: |
+          echo '${{ needs.setup.outputs.metadata }}' | jq -r '.[] | select(.kernel_version=="6.1")' > /tmp/meta.json
+          while IFS='=' read -r key value; do echo "$key=$value" >> $GITHUB_OUTPUT; done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' /tmp/meta.json)
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'commit-info-6.1-*'
+          path: commit_info
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'Kernel-6.1-*'
+          path: release_zips
+          merge-multiple: true
+
+      - name: Download KSU Toolkit Module
+        run: |
+          toolkit=""
+          url=$(curl -sL "https://nightly.link/backslashxx/ksu_toolkit/workflows/module/master?preview" | grep -oP 'https://nightly\.link/backslashxx/ksu_toolkit/workflows/module/master/ksu_toolkit-\d+\.zip' | head -n 1)
+          if [ -n "$url" ]; then
+            toolkit=$(basename "$url")
+            curl --fail -L -o "${{ github.workspace }}/release_zips/${toolkit}" "$url" || toolkit=""
+          fi
+          echo "TOOLKIT_FILE=$toolkit" >> $GITHUB_ENV
+
+      - name: Download SUSFS Module
+        if: inputs.enable_susfs == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo sidex15/susfs4ksu-module --pattern "*.zip" --dir release_zips 2>/dev/null || true
+
+      - name: Download KOWSU Manager APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo KOWX712/KernelSU --pattern "*.apk" --dir release_zips 2>/dev/null || true
+          apk=$(ls release_zips/*.apk 2>/dev/null | head -n 1)
+          echo "KOWSU_APK=$(basename "$apk" 2>/dev/null)" >> $GITHUB_ENV
+          echo "KSUD_VERSION=$(echo "$apk" | grep -oP '\d+(?=-release\.apk$)' || echo "unknown")" >> $GITHUB_ENV
+
+      - name: Read Commit Info
+        id: ksu_info
+        run: |
+          variant="${{ inputs.ksu_variant }}"
+          short_sha() { cut -c1-7 "$1"; }
+          out() { echo "$1" >> $GITHUB_OUTPUT; }
+          ksu_line() {
+            local tag=$1 repo=$2 file=$3
+            [ -f "$file" ] && [[ "$variant" =~ ^(all|$tag)$ ]] || return 0
+            out "${tag,,}=- **$tag**: [\`$(short_sha "$file")\`](https://github.com/$repo/commit/$(cat "$file")) \`$(cat "${file%_commit}_date")\`"
+          }
+          if [ -f "commit_info/susfs_commit" ]; then
+            sha=$(cat commit_info/susfs_commit)
+            out "susfs_commit=\`$(short_sha commit_info/susfs_commit)\`"
+            out "susfs_url=https://gitlab.com/simonpunk/susfs4ksu/-/commit/$sha"
+            out "susfs_date=\`$(cat commit_info/susfs_date)\`"
+          fi
+          if [ -f "commit_info/kowsu_ksu_commit" ] && [ -f "commit_info/ksu_commit_count" ]; then
+            out "driver_version=$((30000 + $(cat commit_info/ksu_commit_count)))"
+          fi
+          ksu_line KOWSU "$(cat commit_info/kowsu_ksu_repo 2>/dev/null)" commit_info/kowsu_ksu_commit
+          ksu_line XXKSU "$(cat commit_info/xxksu_ksu_repo 2>/dev/null)" commit_info/xxksu_ksu_commit
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "${{ needs.setup.outputs.release_tag }}-6.1"
+          name: "Kernel 6.1 (${{ needs.setup.outputs.release_tag }})"
+          body: |
+            - **Kernel Source**: [`${{ steps.meta.outputs.mirror_name }}`](${{ steps.meta.outputs.source_base_url }}/${{ steps.meta.outputs.android_version }}-6.1-${{ steps.meta.outputs.asb_date }}${{ steps.meta.outputs.r_suffix }}.tar.gz) `${{ steps.meta.outputs.android_version }}-6.1.${{ steps.meta.outputs.sub_level }}${{ steps.meta.outputs.r_suffix }}`
+            ${{ steps.ksu_info.outputs.kowsu }}
+            ${{ steps.ksu_info.outputs.xxksu }}
+            ${{ steps.ksu_info.outputs.susfs_url && format('- **SUSFS**: [{0}]({1}) {2}', steps.ksu_info.outputs.susfs_commit, steps.ksu_info.outputs.susfs_url, steps.ksu_info.outputs.susfs_date) || '' }}
+            - **KSU Driver**: `${{ steps.ksu_info.outputs.driver_version || env.KSUD_VERSION }}`　**KSUD Version**: `${{ env.KSUD_VERSION }}`
+            - **Manager**: `${{ env.KOWSU_APK }}`
+            - **Kernel Name (Spoofed)**: `6.1.${{ steps.meta.outputs.sub_level }}${{ inputs.kernel_localversion }}`
+            - **Build Time (Spoofed)**: `${{ inputs.build_timestamp }}`
+            - **Builder (Spoofed)**: `${{ inputs.build_user }}@${{ inputs.build_host }}`
+            - **TMPFS**: ✅　**BBR**: ✅　**IPSET**: ✅
+            - **KSU Toolkit**: ${{ env.TOOLKIT_FILE && format('✅ `({0})`', env.TOOLKIT_FILE) || '❌' }}
+            - **Ccache**: ${{ inputs.use_ccache && '✅' || '❌' }}　**LLVM Clang**: `${{ steps.meta.outputs.clang_version }}`${{ steps.meta.outputs.rust_version && format('　**Rust**: `{0}`', steps.meta.outputs.rust_version) || '' }}
+          files: |
+            release_zips/*.zip
+            release_zips/*.apk
+          prerelease: ${{ inputs.release_type == 'pre-release' }}
