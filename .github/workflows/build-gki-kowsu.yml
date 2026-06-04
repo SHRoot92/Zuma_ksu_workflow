@@ -1,4 +1,4 @@
-name: Build GKI Kernel with KOWSU + SUSFS
+name: Build GKI Kernel with KowSU + SUSFS
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout Workflow Repo (for patches)
+      - name: Checkout Workflow Repo 
         uses: actions/checkout@v6
 
       - name: Setup Build Environment
@@ -76,7 +76,7 @@ jobs:
           git clone --depth=1 --branch="${{ inputs.kernel_ref }}" "${{ env.KERNEL_REPO_URL }}" kernel
           git clone --depth=1 --branch="${{ inputs.susfs_ref }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
 
-      - name: Setup KOWSU KernelSU
+      - name: Setup KowSU KernelSU
         run: |
           cd kernel
           rm -rf KernelSU drivers/kernelsu
