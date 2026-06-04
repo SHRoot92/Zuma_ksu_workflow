@@ -188,12 +188,7 @@ jobs:
       working-directory: ${{ env.KERNEL_DIR }}
       run: |
         
-       CONFIG="$KERNEL_DIR/arch/arm64/configs/gki_defconfig"
-
-       if [ ! -f "$CONFIG" ]; then
-       echo "❌ gki_defconfig not found: $CONFIG"
-       exit 1
-       fi
+        CONFIG="${{ env.CONFIG_FILE }}"
         
         # Add Pixel 8a specific configurations
         cat >> "$CONFIG" << EOF
