@@ -1,172 +1,139 @@
-name: Build GKI Kernel with KowSU + SUSFS
+name: Build Kernel 6.1 Image (Standalone MidoriSU)
 
 on:
-  workflow_dispatch:
-    inputs:
-      disable_susfs:
-        description: 'Disable SuSFS features'
-        required: false
-        default: false
-        type: boolean
-      force_clean_build:
-        description: 'Force clean build (ignore cache)'
-        required: false
-        default: false
-        type: boolean
-      use_ccache:
-        description: 'Use ccache for compilation'
-        required: false
-        default: false
-        type: boolean
-      kernel_ref:
-        description: 'Kernel branch/tag'
-        required: false
-        default: 'android14-6.1-2026-03'
-        type: string
-      susfs_ref:
-        description: 'SuSFS branch/tag'
-        required: false
-        default: 'gki-android14-6.1'
-        type: string
-      kowsu_ref:
-        description: 'KOWSU KernelSU branch/tag'
-        required: false
-        default: 'master'
-        type: string
-      build_epoch:
-        description: 'SOURCE_DATE_EPOCH for reproducible builds'
-        required: false
-        default: '1711843200'
-        type: string
-      build_timestamp:
-        description: 'KBUILD_BUILD_TIMESTAMP'
-        required: false
-        default: 'Sun Mar 31 00:00:00 UTC 2024'
-        type: string
-      build_host:
-        description: 'KBUILD_BUILD_HOST'
-        required: false
-        default: 'GKI-Builder'
-        type: string
-      build_user:
-        description: 'KBUILD_BUILD_USER'
-        required: false
-        default: 'deepongi'
-        type: string
+  workflow_dispatch: # 删除了所有 inputs，直接一键运行
 
 permissions:
   contents: write
 
-concurrency:
-  group: kernel-build-${{ github.ref_name }}
-  cancel-in-progress: false
-
-env:
-  KERNEL_REPO_URL: https://android.googlesource.com/kernel/common
-  SUSFS_REPO_URL: https://gitlab.com/simonpunk/susfs4ksu
-  KOWSU_REPO_URL: https://github.com/KOWX712/KernelSU.git
-  ANYKERNEL_REPO_URL: https://github.com/yapixel/AnyKernel3
-  CLIDR_PATCH_URL: https://raw.githubusercontent.com/infectedmushi/kernel_patches/4cbfb5f8c15acf6b3b797151a54a3a56dc6a843e/fix-clidr-uninitialized.patch
-  WIFI_PATCH_URL: https://github.com/OnePlus-12-Development/android_kernel_qcom_sm8650/commit/3e0cb08.patch
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
+    env:
+      VARIANT: "MidoriSU"
+      KERNEL_VERSION: "6.1"
+      # 以下为自动规范化的编译元数据
+      BUILD_USER: "build-user"
+      BUILD_HOST: "build-host"
+      BUILD_EPOCH: "1711843200"
+      BUILD_TIMESTAMP: "Sun Mar 31 00:00:00 UTC 2024"
+      KERNEL_LOCALVERSION: "-MidoriSU"
+      # 默认开启必备特性
+      USE_SUSFS: "true"
+      USE_DROIDSPACES: "false"
+      USE_CCACHE: "true"
+      BUILD_EBPF: "true"
+      # 环境后缀控制
+      DS_SUFFIX: ""
+      SUSFS_SUFFIX: "-SUSFS"
+      CCACHE_DIR: ${{ github.workspace }}/.ccache-MidoriSU-susfs
+      CCACHE_COMPILERCHECK: content
+      CCACHE_SLOPPINESS: file_macro,time_macros,include_file_mtime,include_file_ctime
 
     steps:
-      - name: Checkout Workflow Repo 
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Setup Build Environment
+      - name: Setup Dynamic Configs (Standalone)
+        id: cfg
         run: |
-          set -e
+          echo "android_version=android14" >> $GITHUB_OUTPUT
+          echo "sub_level=6.1" >> $GITHUB_OUTPUT
+          echo "asb_date=2024-03" >> $GITHUB_OUTPUT
+          echo "r_version=none" >> $GITHUB_OUTPUT
+          echo "r_suffix=" >> $GITHUB_OUTPUT
+          echo "clang_version=r485501b" >> $GITHUB_OUTPUT
+          echo "mirror_tag=GKI-Tools" >> $GITHUB_OUTPUT
+          echo "anykernel_branch=android14-6.1" >> $GITHUB_OUTPUT
+          echo "kmi_version=android14-6.1" >> $GITHUB_OUTPUT
+
+      - name: Free Disk Space & Install Dependencies
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
           sudo apt-get update -qq
-          sudo apt-get install -y libelf-dev pahole build-essential bc bison flex libssl-dev ccache zip curl git
+          sudo apt-get install -y --no-install-recommends \
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache &
 
-          # 创建规范的工作流目录结构
-          mkdir -p kernel_workspace/clang
-          mkdir -p kernel_workspace/build-tools
-          mkdir -p kernel_workspace/clang-tools
+      - name: Restore Ccache
+        if: env.USE_CCACHE == 'true'
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.CCACHE_DIR }}
+          key: gki-6.1-r485501b-2024-03-MidoriSU-susfs-${{ github.run_id }}-${{ strategy.job-index }}
+          restore-keys: |
+            gki-6.1-r485501b-2024-03-MidoriSU-susfs-
 
-          # 1. 下载 Google 官方预编译 Clang (以适用于 Android 14 6.1 的 r485501b 为例)
-          curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r485501b.tar.gz" -o clang.tar.gz
-          tar -xf clang.tar.gz -C kernel_workspace/clang
-          rm -f clang.tar.gz
-
-          # 2. 下载 Google 官方预编译 build-tools
-          curl -fsSL "https://android.googlesource.com/platform/prebuilts/build-tools/+archive/refs/heads/main/linux-x86.tar.gz" -o build-tools.tar.gz
-          tar -xf build-tools.tar.gz -C kernel_workspace/build-tools
-          rm -f build-tools.tar.gz
-
-          # 3. 下载 Google 官方预编译 clang-tools
-          curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang-tools/+archive/refs/heads/main/linux-x86.tar.gz" -o clang-tools.tar.gz
-          tar -xf clang-tools.tar.gz -C kernel_workspace/clang-tools
-          rm -f clang-tools.tar.gz
-
-      - name: Sync Kernel & SuSFS
+      - name: Setup Ccache Wrappers
+        if: env.USE_CCACHE == 'true'
         run: |
-          git clone --depth=1 --branch="${{ inputs.kernel_ref }}" "${{ env.KERNEL_REPO_URL }}" kernel_workspace/kernel
-          git clone --depth=1 --branch="${{ inputs.susfs_ref }}" "${{ env.SUSFS_REPO_URL }}" kernel_workspace/susfs4ksu
+          for i in $(seq 1 60); do which ccache && break; sleep 1; done
+          which ccache || { echo "ccache not found after waiting"; exit 1; }
+          CCACHE_PATH="${{ github.workspace }}/.ccache-bin"
+          mkdir -p "$CCACHE_PATH" && rm -f "$CCACHE_PATH"/*
+          for prog in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-size llvm-readelf llvm-strip; do
+            ln -sf "$(which ccache)" "$CCACHE_PATH/$prog"
+          done
+          echo "$CCACHE_PATH" >> $GITHUB_PATH
+          ccache -M 10G
+          ccache -o hash_dir=false
+          ccache -o compiler_check=content
+          ccache -o sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules
+          ccache -o depend_mode=true
+          ccache -o run_second_cpp=true
+          ccache -z
 
-      - name: Setup KowSU KernelSU
+      - name: Download Toolchains & Kernel Source
         run: |
-          cd kernel_workspace/kernel
-          rm -rf KernelSU drivers/kernelsu
-          git clone --depth=1 --branch="${{ inputs.kowsu_ref }}" "${{ env.KOWSU_REPO_URL }}" KernelSU
+          mkdir -p kernel_workspace && cd kernel_workspace
+          
+          CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r485501b.tar.gz"
+          BTOOLS_URL="https://android.googlesource.com/platform/prebuilts/build-tools/+archive/refs/heads/main/linux-x86.tar.gz"
+          KERNEL_BASE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1.tar.gz"
+          
+          aria2c -s16 -x16 -k1M "$KERNEL_BASE_URL" -o common.tar.gz && mkdir -p common && tar -xzf common.tar.gz -C common &
+          aria2c -s16 -x16 -k1M "$CLANG_URL" -o clang.tar.gz && mkdir -p clang && tar -xzf clang.tar.gz -C clang && rm clang.tar.gz &
+          aria2c -s16 -x16 -k1M "$BTOOLS_URL" -o build-tools.tar.gz && mkdir -p build-tools && tar -xzf build-tools.tar.gz -C build-tools && rm build-tools.tar.gz &
+          wait
+          
+          sed -i 's/ -dirty//g' common/scripts/setlocalversion
+          rm -f common/android/abi_gki_protected_exports_* || true
+
+      - name: Setup KernelSU (MidoriSU)
+        working-directory: kernel_workspace/common
+        run: |
+          git clone --single-branch --branch=main https://github.com/midori01/KernelSU.git KernelSU
+          sed -i 's|ccflags-y += -I$(KSU_KERNEL_DIR) -I$(KSU_KERNEL_DIR)/include|ccflags-y += -I$(srctree)/$(src) -I$(srctree)/$(src)/include -I$(src) -I$(src)/include|' KernelSU/kernel/Kbuild
+          
           ln -sf ../KernelSU/kernel drivers/kernelsu
-          echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
-          sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
-      - name: Setup SuSFS with Local Patches
-        if: inputs.disable_susfs != 'true'
+      - name: Setup SUSFS
+        if: env.USE_SUSFS == 'true'
+        working-directory: kernel_workspace/common
         run: |
-          cp kernel_workspace/susfs4ksu/kernel_patches/fs/susfs.c kernel_workspace/kernel/fs/
-          cp kernel_workspace/susfs4ksu/kernel_patches/include/linux/susfs.h kernel_workspace/kernel/include/linux/
-          cp kernel_workspace/susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel_workspace/kernel/include/linux/
-
-          cd kernel_workspace/kernel
-          # 注意：应用此步骤需确保你的本地 workflow 仓库的该路径下存有对应的 patch 文件
-          patch -p1 --forward < ../../.github/patches/kowsu/50_add_susfs_in_gki-android14-6.1.patch || true
-          cd KernelSU
-          patch -p1 --forward < ../../../.github/patches/kowsu/10_enable_susfs_for_ksu.patch || true
-
-      - name: Apply Fix Patches
-        run: |
-          cd kernel_workspace/kernel
-          rm -f android/abi_gki_protected_exports_* || true
-          curl -fsSL "${{ env.CLIDR_PATCH_URL }}" | patch -p1 --forward || true
-          curl -fsSL "${{ env.WIFI_PATCH_URL }}" | patch -p1 --forward || true
-
-      - name: Compile Kernel
-        working-directory: kernel_workspace/kernel
-        run: |
-          set -e
+          SUSFS_DIR="${{ github.workspace }}/susfs4ksu"
+          git clone --depth=1 --branch="gki-android14-6.1" https://gitlab.com/simonpunk/susfs4ksu "$SUSFS_DIR"
           
-          # 1. 自动推导工作空间绝对路径
-          WORK_DIR="$(dirname "$PWD")" 
+          cp "$SUSFS_DIR"/kernel_patches/fs/* fs/
+          cp "$SUSFS_DIR"/kernel_patches/include/linux/* include/linux/
           
-          # 2. 注入 Google 工具链环境（不含 rust/bin）
-          export PATH="${WORK_DIR}/clang/bin:${WORK_DIR}/build-tools/bin:${WORK_DIR}/clang-tools/bin:${PATH}"
-          
-          # 如果开启了 ccache 缓存，则注入 ccache 路径
-          if [ -d "${{ github.workspace }}/.ccache-bin" ]; then
-            export PATH="${{ github.workspace }}/.ccache-bin:${PATH}"
+          if [ -d "${{ github.workspace }}/.github/patches" ]; then
+            patch -p1 < "${{ github.workspace }}/.github/patches/android14-6.1/50_add_susfs_in_gki-android14-6.1.patch" || true
+            patch -p1 -d KernelSU < "${{ github.workspace }}/.github/patches/10_enable_susfs_for_ksu.patch" || true
           fi
-          
-          # 3. 去除编译路径绝对化，保障内核干净稳定
-          ROOT_REAL_PATH=$(dirname "$(readlink -f "$PWD")")
-          export KBUILD_GENDWARFKSYMS_STABLE=1
-          export KCFLAGS="-fdebug-prefix-map=$ROOT_REAL_PATH=. -fmacro-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=. -no-canonical-prefixes -pipe -fno-stack-protector -DANDROID_COMMON_KERNEL"
-          
-          # 4. 伪装编译元数据（去隐私/防变异变动）
-          export SOURCE_DATE_EPOCH="${{ inputs.build_epoch }}"
-          export KBUILD_BUILD_TIMESTAMP="${{ inputs.build_timestamp }}"
-          export KBUILD_BUILD_HOST="${{ inputs.build_host }}"
-          export KBUILD_BUILD_USER="${{ inputs.build_user }}"
 
-          # 5. 将 KowSU 和 SuSFS 的 Kconfig 选项写入基础 defconfig 
-          cat <<EOF >> arch/arm64/configs/gki_defconfig
+      - name: Inject Kernel Configs (Inline Standalone)
+        working-directory: kernel_workspace/common
+        run: |
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
+          
+          cat <<EOF >> "$DEFCONFIG"
           CONFIG_KPROBES=y
           CONFIG_HAVE_KPROBES=y
           CONFIG_TCP_CONG_BBR=y
@@ -178,13 +145,13 @@ jobs:
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_LOCALVERSION_AUTO=n
-          CONFIG_LOCALVERSION="-deepongi+"
+          CONFIG_LOCALVERSION="${{ env.KERNEL_LOCALVERSION }}"
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           CONFIG_LTO_NONE=y
           EOF
 
-          if [ "${{ inputs.disable_susfs }}" != "true" ]; then
-            cat <<'SUSFS_EOF' >> arch/arm64/configs/gki_defconfig
+          if [ "${{ env.USE_SUSFS }}" = "true" ]; then
+            cat <<'SUSFS_EOF' >> "$DEFCONFIG"
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
           CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -198,54 +165,76 @@ jobs:
           SUSFS_EOF
           fi
 
-          # 6. 生成并编译内核
-          JOBS=$(nproc)
-          
-          # 生成最终 .config
-          make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
-          
-          # 如果开启了强力清理
-          [ "${{ inputs.force_clean_build }}" = "true" ] && make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out clean
-          
-          # 执行全量编译
-          make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
-          
-          # 7. 打印 ccache 状态（可选）
-          [ "${{ inputs.use_ccache }}" = "true" ] && ccache -s || true
-
-      - name: Package Kernel
+      - name: Save Commit Info
+        working-directory: kernel_workspace/common
         run: |
-          cd kernel_workspace/kernel
-          KERNEL_VERSION=$(grep "^VERSION" Makefile | cut -d' ' -f3).$(grep "^PATCHLEVEL" Makefile | cut -d' ' -f3).$(grep "^SUBLEVEL" Makefile | cut -d' ' -f3)
-          cd ../..
+          COMMIT_DIR="$(pwd)/commit_info"
+          mkdir -p "$COMMIT_DIR"
+          cd KernelSU
+          
+          git rev-parse HEAD > "$COMMIT_DIR/midorisu_ksu_commit"
+          git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M %z' HEAD > "$COMMIT_DIR/midorisu_ksu_date"
+          git rev-list --count HEAD > "$COMMIT_DIR/ksu_commit_count"
+          
+          if [ "${{ env.USE_SUSFS }}" = "true" ] && [ -d "${{ github.workspace }}/susfs4ksu" ]; then
+            pushd "${{ github.workspace }}/susfs4ksu" > /dev/null
+            git rev-parse HEAD > "$COMMIT_DIR/susfs_commit"
+            git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M %z' HEAD > "$COMMIT_DIR/susfs_date"
+            popd > /dev/null
+          fi
 
-          git clone --depth=1 "${{ env.ANYKERNEL_REPO_URL }}" AnyKernel3
-
-          cp kernel_workspace/kernel/out/arch/arm64/boot/Image AnyKernel3/
-          [ -f kernel_workspace/kernel/out/arch/arm64/boot/dtb ] && cp kernel_workspace/kernel/out/arch/arm64/boot/dtb AnyKernel3/ || true
-
-          cd AnyKernel3
-          rm -rf .git .github
-          ZIP_NAME="${KERNEL_VERSION}-kowsu.zip"
-          zip -r9 "../$ZIP_NAME" .
-          echo "KERNEL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
-
-      - name: Upload Artifact
+      - name: Upload Commit Info
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-kowsu
-          path: ${{ env.KERNEL_ZIP }}
+          name: commit-info-6.1-MidoriSU${{ env.SUSFS_SUFFIX }}
+          path: kernel_workspace/common/commit_info/
+          retention-days: 1
 
-      - name: Create Release
-        if: always()
+      - name: Compile Kernel
+        working-directory: kernel_workspace/common
         run: |
-          TAG="kowsu-build-${{ github.run_number }}"
-          NOTES="KOWSU + SUSFS build #${{ github.run_number }} · $(date -u '+%Y-%m-%d %H:%M UTC')"
-
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${{ env.KERNEL_ZIP }}" --repo "${{ github.repository }}" --clobber
-          else
-            gh release create "$TAG" "${{ env.KERNEL_ZIP }}" --title "$TAG" --notes "$NOTES" --repo "${{ github.repository }}"
+          WORK_DIR="${{ github.workspace }}/kernel_workspace"
+          export PATH="${WORK_DIR}/clang/bin:${WORK_DIR}/build-tools/bin:${PATH}"
+          
+          if [ -d "${{ github.workspace }}/.ccache-bin" ]; then
+            export PATH="${{ github.workspace }}/.ccache-bin:${PATH}"
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
+          
+          ROOT_REAL_PATH=$(dirname "$(readlink -f "$PWD")")
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export KCFLAGS="-fdebug-prefix-map=$ROOT_REAL_PATH=. -fmacro-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=. -no-canonical-prefixes -pipe -fno-stack-protector -D__ANDROID_COMMON_KERNEL__"
+          export SOURCE_DATE_EPOCH="${{ env.BUILD_EPOCH }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_BUILD_HOST="${{ env.BUILD_HOST }}"
+          export KBUILD_BUILD_USER="${{ env.BUILD_USER }}"
+          
+          make -j$(nproc) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+          make -j$(nproc) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          [ "${{ env.USE_CCACHE }}" = "true" ] && ccache -s
+
+      
+      - name: Package Kernel
+        working-directory: kernel_workspace
+        run: |
+          IMAGE="common/out/arch/arm64/boot/Image"
+          [ -f "$IMAGE" ] || { echo "Binary Missing!"; exit 1; }
+          ZIP_NAME="MidoriSU_Kernel-6.1_Standalone${{ env.SUSFS_SUFFIX }}.zip"
+          
+          git clone --depth=1 https://github.com/midori01/AnyKernel3 -b android14-6.1 anykernel
+          cp "$IMAGE" anykernel/
+          cd anykernel && rm -rf .git && zip -r9 "../$ZIP_NAME" *
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Save Ccache
+        if: env.USE_CCACHE == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.CCACHE_DIR }}
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-6.1-MidoriSU${{ env.SUSFS_SUFFIX }}
+          path: kernel_workspace/${{ env.ZIP_NAME }}
