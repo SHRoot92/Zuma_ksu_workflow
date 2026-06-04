@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      use_ccache:
+        description: 'Use ccache for compilation'
+        required: false
+        default: false
+        type: boolean
       kernel_ref:
         description: 'Kernel branch/tag'
         required: false
@@ -27,6 +32,26 @@ on:
         description: 'KOWSU KernelSU branch/tag'
         required: false
         default: 'master'
+        type: string
+      build_epoch:
+        description: 'SOURCE_DATE_EPOCH for reproducible builds'
+        required: false
+        default: '1711843200'
+        type: string
+      build_timestamp:
+        description: 'KBUILD_BUILD_TIMESTAMP'
+        required: false
+        default: 'Sun Mar 31 00:00:00 UTC 2024'
+        type: string
+      build_host:
+        description: 'KBUILD_BUILD_HOST'
+        required: false
+        default: 'GKI-Builder'
+        type: string
+      build_user:
+        description: 'KBUILD_BUILD_USER'
+        required: false
+        default: 'deepongi'
         type: string
 
 permissions:
@@ -51,34 +76,42 @@ jobs:
 
     steps:
       - name: Checkout Workflow Repo 
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Build Environment
         run: |
           set -e
           sudo apt-get update -qq
-          sudo apt-get install -y libelf-dev pahole
+          sudo apt-get install -y libelf-dev pahole build-essential bc bison flex libssl-dev ccache zip curl git
 
-          mkdir -p /tmp/toolchains
+          # 创建规范的工作流目录结构
+          mkdir -p kernel_workspace/clang
+          mkdir -p kernel_workspace/build-tools
+          mkdir -p kernel_workspace/clang-tools
 
-          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz" -o /tmp/toolchains/arm64.tar.xz
-          tar -xf /tmp/toolchains/arm64.tar.xz -C /tmp/toolchains/
-          ARM64_DIR=$(find /tmp/toolchains -maxdepth 1 -type d -name "arm-gnu-toolchain-*-aarch64-none-linux-gnu" | head -1)
-          echo "ARM64_TOOLCHAIN=${ARM64_DIR}/bin/aarch64-none-linux-gnu-" >> $GITHUB_ENV
+          # 1. 下载 Google 官方预编译 Clang (以适用于 Android 14 6.1 的 r485501b 为例)
+          curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r485501b.tar.gz" -o clang.tar.gz
+          tar -xf clang.tar.gz -C kernel_workspace/clang
+          rm -f clang.tar.gz
 
-          curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz" -o /tmp/toolchains/arm32.tar.xz
-          tar -xf /tmp/toolchains/arm32.tar.xz -C /tmp/toolchains/
-          ARM32_DIR=$(find /tmp/toolchains -maxdepth 1 -type d -name "arm-gnu-toolchain-*-arm-none-linux-gnueabihf" | head -1)
-          echo "ARM32_TOOLCHAIN=${ARM32_DIR}/bin/arm-none-linux-gnueabihf-" >> $GITHUB_ENV
+          # 2. 下载 Google 官方预编译 build-tools
+          curl -fsSL "https://android.googlesource.com/platform/prebuilts/build-tools/+archive/refs/heads/main/linux-x86.tar.gz" -o build-tools.tar.gz
+          tar -xf build-tools.tar.gz -C kernel_workspace/build-tools
+          rm -f build-tools.tar.gz
+
+          # 3. 下载 Google 官方预编译 clang-tools
+          curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang-tools/+archive/refs/heads/main/linux-x86.tar.gz" -o clang-tools.tar.gz
+          tar -xf clang-tools.tar.gz -C kernel_workspace/clang-tools
+          rm -f clang-tools.tar.gz
 
       - name: Sync Kernel & SuSFS
         run: |
-          git clone --depth=1 --branch="${{ inputs.kernel_ref }}" "${{ env.KERNEL_REPO_URL }}" kernel
-          git clone --depth=1 --branch="${{ inputs.susfs_ref }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+          git clone --depth=1 --branch="${{ inputs.kernel_ref }}" "${{ env.KERNEL_REPO_URL }}" kernel_workspace/kernel
+          git clone --depth=1 --branch="${{ inputs.susfs_ref }}" "${{ env.SUSFS_REPO_URL }}" kernel_workspace/susfs4ksu
 
       - name: Setup KowSU KernelSU
         run: |
-          cd kernel
+          cd kernel_workspace/kernel
           rm -rf KernelSU drivers/kernelsu
           git clone --depth=1 --branch="${{ inputs.kowsu_ref }}" "${{ env.KOWSU_REPO_URL }}" KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -88,33 +121,52 @@ jobs:
       - name: Setup SuSFS with Local Patches
         if: inputs.disable_susfs != 'true'
         run: |
-          cp susfs4ksu/kernel_patches/fs/susfs.c kernel/fs/
-          cp susfs4ksu/kernel_patches/include/linux/susfs.h kernel/include/linux/
-          cp susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel/include/linux/
+          cp kernel_workspace/susfs4ksu/kernel_patches/fs/susfs.c kernel_workspace/kernel/fs/
+          cp kernel_workspace/susfs4ksu/kernel_patches/include/linux/susfs.h kernel_workspace/kernel/include/linux/
+          cp kernel_workspace/susfs4ksu/kernel_patches/include/linux/susfs_def.h kernel_workspace/kernel/include/linux/
 
-          cd kernel
-          
-          patch -p1 --forward < ../.github/patches/kowsu/50_add_susfs_in_gki-android14-6.1.patch || true
+          cd kernel_workspace/kernel
+          # 注意：应用此步骤需确保你的本地 workflow 仓库的该路径下存有对应的 patch 文件
+          patch -p1 --forward < ../../.github/patches/kowsu/50_add_susfs_in_gki-android14-6.1.patch || true
           cd KernelSU
-          patch -p1 --forward < ../../.github/patches/kowsu/10_enable_susfs_for_ksu.patch || true
+          patch -p1 --forward < ../../../.github/patches/kowsu/10_enable_susfs_for_ksu.patch || true
 
       - name: Apply Fix Patches
         run: |
-          cd kernel
+          cd kernel_workspace/kernel
           rm -f android/abi_gki_protected_exports_* || true
           curl -fsSL "${{ env.CLIDR_PATCH_URL }}" | patch -p1 --forward || true
           curl -fsSL "${{ env.WIFI_PATCH_URL }}" | patch -p1 --forward || true
 
-      - name: Build Kernel
+      - name: Compile Kernel
+        working-directory: kernel_workspace/kernel
         run: |
-          cd kernel
-          export ARCH=arm64
-          export CROSS_COMPILE="${ARM64_TOOLCHAIN}"
-          export CROSS_COMPILE_COMPAT="${ARM32_TOOLCHAIN}"
+          set -e
+          
+          # 1. 自动推导工作空间绝对路径
+          WORK_DIR="$(dirname "$PWD")" 
+          
+          # 2. 注入 Google 工具链环境（不含 rust/bin）
+          export PATH="${WORK_DIR}/clang/bin:${WORK_DIR}/build-tools/bin:${WORK_DIR}/clang-tools/bin:${PATH}"
+          
+          # 如果开启了 ccache 缓存，则注入 ccache 路径
+          if [ -d "${{ github.workspace }}/.ccache-bin" ]; then
+            export PATH="${{ github.workspace }}/.ccache-bin:${PATH}"
+          fi
+          
+          # 3. 去除编译路径绝对化，保障内核干净稳定
+          ROOT_REAL_PATH=$(dirname "$(readlink -f "$PWD")")
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export KCFLAGS="-fdebug-prefix-map=$ROOT_REAL_PATH=. -fmacro-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=. -no-canonical-prefixes -pipe -fno-stack-protector -DANDROID_COMMON_KERNEL"
+          
+          # 4. 伪装编译元数据（去隐私/防变异变动）
+          export SOURCE_DATE_EPOCH="${{ inputs.build_epoch }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ inputs.build_timestamp }}"
+          export KBUILD_BUILD_HOST="${{ inputs.build_host }}"
+          export KBUILD_BUILD_USER="${{ inputs.build_user }}"
 
-          make O=out gki_defconfig
-
-          cat <<EOF >> out/.config
+          # 5. 将 KowSU 和 SuSFS 的 Kconfig 选项写入基础 defconfig 
+          cat <<EOF >> arch/arm64/configs/gki_defconfig
           CONFIG_KPROBES=y
           CONFIG_HAVE_KPROBES=y
           CONFIG_TCP_CONG_BBR=y
@@ -132,7 +184,7 @@ jobs:
           EOF
 
           if [ "${{ inputs.disable_susfs }}" != "true" ]; then
-            cat <<'SUSFS_EOF' >> out/.config
+            cat <<'SUSFS_EOF' >> arch/arm64/configs/gki_defconfig
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
           CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -146,22 +198,31 @@ jobs:
           SUSFS_EOF
           fi
 
-          make O=out olddefconfig
-
+          # 6. 生成并编译内核
           JOBS=$(nproc)
-          [ "${{ inputs.force_clean_build }}" = "true" ] && make -j$JOBS O=out clean
-          make -j$JOBS O=out Image
+          
+          # 生成最终 .config
+          make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+          
+          # 如果开启了强力清理
+          [ "${{ inputs.force_clean_build }}" = "true" ] && make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out clean
+          
+          # 执行全量编译
+          make -j$JOBS LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          
+          # 7. 打印 ccache 状态（可选）
+          [ "${{ inputs.use_ccache }}" = "true" ] && ccache -s || true
 
       - name: Package Kernel
         run: |
-          cd kernel
+          cd kernel_workspace/kernel
           KERNEL_VERSION=$(grep "^VERSION" Makefile | cut -d' ' -f3).$(grep "^PATCHLEVEL" Makefile | cut -d' ' -f3).$(grep "^SUBLEVEL" Makefile | cut -d' ' -f3)
-          cd ..
+          cd ../..
 
           git clone --depth=1 "${{ env.ANYKERNEL_REPO_URL }}" AnyKernel3
 
-          cp kernel/out/arch/arm64/boot/Image AnyKernel3/
-          [ -f kernel/out/arch/arm64/boot/dtb ] && cp kernel/out/arch/arm64/boot/dtb AnyKernel3/ || true
+          cp kernel_workspace/kernel/out/arch/arm64/boot/Image AnyKernel3/
+          [ -f kernel_workspace/kernel/out/arch/arm64/boot/dtb ] && cp kernel_workspace/kernel/out/arch/arm64/boot/dtb AnyKernel3/ || true
 
           cd AnyKernel3
           rm -rf .git .github
@@ -170,7 +231,7 @@ jobs:
           echo "KERNEL_ZIP=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-kowsu
           path: ${{ env.KERNEL_ZIP }}
