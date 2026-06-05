@@ -258,59 +258,34 @@ jobs:
       
       - name: Build kernel
         run: |
-          WORKDIR="$(pwd)"
-          
-          if [ -z "$CLANG_BIN" ]; then
-            echo "Error: CLANG_BIN environment variable not set"
-            exit 1
-          fi
-          
-          if [ ! -f "$CLANG_BIN/clang" ]; then
-            echo "Error: clang not found at $CLANG_BIN/clang"
-            exit 1
-          fi
-          
-          # 设置 PATH: 优先使用 build-tools 和 Greenforce Clang
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
-          
-          if [ -n "$GCC_PATH" ]; then
-            export CROSS_COMPILE="${GCC_PATH}"
-            echo "Using custom GCC toolchain: ${CROSS_COMPILE}"
-            GCC_BIN_DIR=$(dirname "${GCC_PATH}")
-            export PATH="${GCC_BIN_DIR}:$PATH"
-          else
-            echo "Warning: GCC_PATH not set, using system toolchain"
-            export CROSS_COMPILE="aarch64-linux-gnu-"
-          fi
-          
-          if [ -n "$GCC_ARM32_DIR" ] && [ -f "${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-gcc" ]; then
-            export CROSS_COMPILE_ARM32="${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-"
-            export PATH="${GCC_ARM32_DIR}:$PATH"
-            echo "Using 32-bit toolchain: ${CROSS_COMPILE_ARM32}"
-          fi
-          
-          echo "Using Greenforce Clang from: $CLANG_BIN"
-          clang --version
-          
-          cd kernel_workspace/common
-          
-          export KCFLAGS="-O2 -Wno-error"
-          
-          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-          
-          export KBUILD_GENDWARFKSYMS_STABLE=1
-          
-          # 不再手动设置 HOSTCC，让 LLVM=1 自动处理
-          # 只需要设置目标架构的交叉编译前缀
-          
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out gki_defconfig
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out Image
-          
-          echo "Kernel build completed."
-          
-          df -h
+         WORKDIR="$(pwd)"
+    
+         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+    
+    
+         export CROSS_COMPILE="${GCC_PATH}"
+         export PATH="$(dirname "${GCC_PATH}"):$PATH"
+    
+    
+         if [ -n "$GCC_ARM32_DIR" ]; then
+         export CROSS_COMPILE_ARM32="${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-"
+         export PATH="${GCC_ARM32_DIR}:$PATH"
+         fi
+    
+         cd kernel_workspace/common
+    
+         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+         export KBUILD_GENDWARFKSYMS_STABLE=1
+    
+    
+         export HOSTCC=gcc
+         export HOSTCXX=g++
+         export CC=clang
+    
+         make -j$(nproc --all) ARCH=arm64 O=out gki_defconfig
+         make -j$(nproc --all) ARCH=arm64 O=out Image
       
       - name: Clone AnyKernel3 and package kernel
         run: |
