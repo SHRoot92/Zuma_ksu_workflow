@@ -39,65 +39,68 @@ jobs:
 
          sudo apt update
          sudo apt-get install -y --no-install-recommends \
-          binutils \
-          python-is-python3 \
-          libssl-dev \
-          libelf-dev \
-          aria2 \
-          zstd \
-          unzip \
-          wget \
-          pahole \
-          zip \
-          gcc-aarch64-linux-gnu
+           binutils \
+           python-is-python3 \
+           libssl-dev \
+           libelf-dev \
+           aria2 \
+           zstd \
+           unzip \
+           wget \
+           pahole \
+           zip \
+           gcc-aarch64-linux-gnu
 
          echo "Downloading GKI source..."
          aria2c -s16 -x16 -k1M \
           "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r14.tar.gz" \
-          -o common.tar.gz
+         -o common.tar.gz
 
          mkdir -p common
          tar -xzf common.tar.gz -C common
          rm -f common.tar.gz
 
          echo "Downloading Clang..."
-         # 下载并解压，不指定目录，让 tar 自动创建
+         mkdir -p clang
          aria2c -s16 -x16 -k1M \
           "https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz" \
          -o clang.tar.gz
     
-         # 解压并查看目录结构
-         tar -xzf clang.tar.gz
+   
+         tar -xzf clang.tar.gz -C clang
          rm -f clang.tar.gz
     
-         # 查找 clang 目录（通常是 Clang-* 格式）
-         CLANG_DIR=$(find . -maxdepth 1 -type d -name "Clang-*" | head -1)
-         if [ -z "$CLANG_DIR" ]; then
-          echo "Error: Cannot find Clang directory"
-         ls -la
+     
+         if [ -f "$PWD/clang/bin/clang" ]; then
+         CLANG_BIN="$PWD/clang/bin"
+         else
+         CLANG_BIN=$(find "$PWD/clang" -type d -name "bin" | head -1)
+         if [ -z "$CLANG_BIN" ]; then
+         echo "Error: Cannot find bin directory in clang/"
+         ls -la clang/
          exit 1
          fi
+         fi
     
-         CLANG_BIN="$(realpath "$CLANG_DIR")/bin"
          if [ ! -f "$CLANG_BIN/clang" ]; then
          echo "Error: clang not found in $CLANG_BIN"
-         ls -la "$CLANG_DIR"
+         ls -la "$CLANG_BIN"
          exit 1
          fi
     
          echo "Clang installed successfully:"
          $CLANG_BIN/clang --version
     
-         # 验证 ARM64 支持
+   
          echo "Checking ARM64 support:"
-         $CLANG_BIN/clang -target aarch64-linux-gnu --version || echo "ARM64 target available"
+         $CLANG_BIN/clang -target aarch64-linux-gnu --version
     
          echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
 
          echo "Downloading build tools..."
          mkdir -p build-tools
          aria2c -s16 -x16 -k1M \
-           "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
+          "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
          -o build-tools.zip
          unzip -q build-tools.zip -d build-tools
          rm -f build-tools.zip
