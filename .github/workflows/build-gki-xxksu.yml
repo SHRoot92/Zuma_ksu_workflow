@@ -67,9 +67,9 @@ jobs:
           echo "Extracting kernel version from source..."
           cd common
           
-          KERNEL_V=$(grep -E '^VERSION = ' Makefile | awk '{print $3}')
-          KERNEL_P=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
-          KERNEL_S=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
+          KERNEL_V=$(grep -E '^VERSION =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_P=$(grep -E '^PATCHLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_S=$(grep -E '^SUBLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
           
           if [ -z "$KERNEL_V" ] || [ -z "$KERNEL_P" ]; then
             echo "Error: Failed to extract kernel version from Makefile"
