@@ -8,7 +8,7 @@ env:
   KBUILD_BUILD_HOST: "build-host"
   BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
   SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
-  KSU_BRANCH: "main"
+  KSU_BRANCH: "master"
   GCC_VERSION: "14.2.rel1"
   GS_TAG: "r263"
 
