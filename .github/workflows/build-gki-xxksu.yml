@@ -214,7 +214,6 @@ jobs:
           done
 
       - name: Build kernel
-      - name: Build kernel
         run: |
          WORKDIR="$(pwd)"
     
