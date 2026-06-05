@@ -104,7 +104,7 @@ jobs:
           
           echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
           
-          echo "Downloading GCC toolchains (for binutils only)..."
+          echo "Downloading GCC toolchains (for binutils and host tools)..."
           BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${GCC_VERSION}/binrel/"
           
           ARCHIVE64="arm-gnu-toolchain-${GCC_VERSION}-x86_64-aarch64-none-linux-gnu.tar.xz"
@@ -260,16 +260,14 @@ jobs:
         run: |
           WORKDIR="$(pwd)"
           
-          # 添加 Clang 和 build-tools 到 PATH
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+          # 添加 build-tools 到 PATH
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+          
+          # 添加 Greenforce Clang 到 PATH
+          export PATH="$CLANG_BIN:$PATH"
           
           # 添加 GCC binutils 到 PATH（用于链接器等工具）
           export PATH="${GCC_PATH}:$PATH"
-          
-          # 可选：添加 32-bit binutils
-          if [ -n "$GCC_ARM32_DIR" ]; then
-            export PATH="${GCC_ARM32_DIR}:$PATH"
-          fi
           
           cd kernel_workspace/common
           
@@ -284,22 +282,47 @@ jobs:
           # KCFLAGS 添加 -Wno-macro-redefined 来解决 KernelSU 宏冲突
           export KCFLAGS="-O2 -Wno-error -Wno-macro-redefined -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
           
-          # 设置编译器
+          # HOSTCC 使用系统 GCC（编译 host 工具）
           export HOSTCC=gcc
           export HOSTCXX=g++
+          export HOSTLD=ld
+          
+          # 内核编译使用 Clang
           export CC=clang
           
-          # 不设置 CROSS_COMPILE，让 Clang 的 --target 自动处理
+          # 不设置 CROSS_COMPILE，让 Clang 自己处理 target
           unset CROSS_COMPILE
           
-          echo "Using Clang from: $(which clang)"
+          echo "Using Clang for kernel:"
           clang --version
+          echo "Target aarch64 test:"
+          clang -target aarch64-linux-gnu --version || echo "Clang aarch64 target available"
           
-          echo "Starting kernel build with Clang..."
+          echo "Using HOSTCC for host tools:"
+          gcc --version
           
-          # 使用 LLVM=1 强制使用 Clang，LLVM_IAS=1 使用 LLVM 集成汇编器
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out gki_defconfig
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out Image
+          echo "Starting kernel build (GCC for host, Clang for kernel)..."
+          
+          # 使用 LLVM=1 和 LLVM_IAS=1，但明确指定 HOSTCC 使用 GCC
+          make -j$(nproc --all) \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            ARCH=arm64 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=ld \
+            O=out \
+            gki_defconfig
+          
+          make -j$(nproc --all) \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            ARCH=arm64 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=ld \
+            O=out \
+            Image
           
           echo "Kernel build completed."
           
