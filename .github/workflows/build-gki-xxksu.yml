@@ -26,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install dependencies and initialize source repository with LLVM-Clang20 toolchain
+      - name: Install dependencies and initialize source repository with LLVM-Clang23 toolchain
         run: |
           rm -rf kernel_workspace
           mkdir kernel_workspace
@@ -48,7 +48,8 @@ jobs:
             unzip \
             wget \
             pahole \
-            zip
+            zip \
+            gcc-aarch64-linux-gnu
 
           echo "Downloading GKI source..."
           aria2c -s16 -x16 -k1M \
@@ -60,9 +61,14 @@ jobs:
           rm -f common.tar.gz
 
           echo "Downloading Clang..."
-          wget -qO- "https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_clang.sh" | bash &> /dev/null
+          mkdir -p clang
+          aria2c -s16 -x16 -k1M \
+            "https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz" \
+            -o clang.tar.gz
+          tar -xzf clang.tar.gz -C clang --strip-components=1
+          rm -f clang.tar.gz
           
-          CLANG_BIN="$PWD/greenforce-clang/bin"
+          CLANG_BIN="$PWD/clang/bin"
           if [ ! -d "$CLANG_BIN" ]; then
               echo "Error: Clang not found in ${CLANG_BIN}."
               exit 1
@@ -71,7 +77,6 @@ jobs:
           echo "Clang installed successfully:"
           $CLANG_BIN/clang --version
           
-          # 保存 Clang 路径到环境变量，供后续步骤使用
           echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
 
           echo "Downloading build tools..."
@@ -215,44 +220,43 @@ jobs:
 
       - name: Build kernel
         run: |
-         WORKDIR="$(pwd)"
-    
-         #使用之前保存的 Clang 路径
-         if [ -z "$CLANG_BIN" ]; then
-         echo "Error: CLANG_BIN environment variable not set"
-         exit 1
-         fi
-    
-         if [ ! -d "$CLANG_BIN" ]; then
-         echo "Error: Clang directory not found at $CLANG_BIN"
-         exit 1
-         fi
-    
-         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
-    
-         echo "Using Clang from: $CLANG_BIN"
-         clang --version
-    
-         cd kernel_workspace/common
-    
-         ROOT_REAL_PATH=$(readlink -f "$PWD")
-         export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
-    
-         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-         export KBUILD_GENDWARFKSYMS_STABLE=1
-    
-         # 明确指定 HOSTCC 使用系统 gcc，CC 使用 clang
-         export HOSTCC=gcc
-         export CC=clang
-    
-         make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
-         make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
-    
-         echo "Kernel build completed."
-    
-         df -h
+          WORKDIR="$(pwd)"
+          
+          if [ -z "$CLANG_BIN" ]; then
+            echo "Error: CLANG_BIN environment variable not set"
+            exit 1
+          fi
+          
+          if [ ! -d "$CLANG_BIN" ]; then
+            echo "Error: Clang directory not found at $CLANG_BIN"
+            exit 1
+          fi
+          
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+          
+          echo "Using Clang from: $CLANG_BIN"
+          clang --version
+          
+          cd kernel_workspace/common
+          
+          ROOT_REAL_PATH=$(readlink -f "$PWD")
+          export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+          
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          export CC=clang
+          
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
+          
+          echo "Kernel build completed."
+          
+          df -h
 
       - name: Clone AnyKernel3 and package kernel
         run: |
