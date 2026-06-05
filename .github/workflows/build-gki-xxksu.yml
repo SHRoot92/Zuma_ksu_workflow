@@ -288,6 +288,29 @@ jobs:
             [ -f "$f" ] && sed -i "\$s|echo \"\\\$res\"|echo \"-${SUFFIX}\"|" "$f"
           done
 
+      - name: Show build metadata
+        run: |
+         echo "╔══════════════════════════════════════════╗"
+         echo "║         BUILD METADATA SUMMARY           ║"
+         echo "╠══════════════════════════════════════════╣"
+         echo "║ KERNEL:                                  ║"
+         echo "║   Version: ${{ env.KERNEL_VERSION_FULL_WITH_SUB }}"
+         echo "║   Suffix:  ${{ env.KERNEL_NAME }}"
+         echo "╠══════════════════════════════════════════╣"
+         echo "║ xxKSU:                                   ║"
+         echo "║   Version: ${{ env.KSUVER }}"
+         echo "║   Branch:  ${{ env.KSU_BRANCH }}"
+         echo "╠══════════════════════════════════════════╣"
+         echo "║ COMPILER:                                ║"
+         $CLANG_BIN/clang --version | head -1 | sed 's/^/║   Clang:  /'
+         ${GCC_PATH}gcc --version | head -1 | sed 's/^/║   GCC64:  /'
+         echo "╠══════════════════════════════════════════╣"
+         echo "║ ENVIRONMENT:                             ║"
+         echo "║   User:   ${{ env.KBUILD_BUILD_USER }}"
+         echo "║   Host:   ${{ env.KBUILD_BUILD_HOST }}"
+         echo "║   Cores:  $(nproc)"
+         echo "╚══════════════════════════════════════════╝"
+         
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
