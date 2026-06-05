@@ -8,7 +8,7 @@ env:
   KBUILD_BUILD_HOST: "build-host"
   BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
   SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
-  KSU_BRANCH: "master"
+  KSU_BRANCH: "main"
   GCC_VERSION: "14.2.rel1"
   GS_TAG: "r263"
 
@@ -55,7 +55,6 @@ jobs:
           git clone --depth=1 --branch ${{ env.GS_TAG }} https://github.com/engstk/gs.git common
           
           cd common
-          rm -rf drivers/kernelsu
           
           # 从内核源码动态提取版本号
           echo "Extracting kernel version from source..."
@@ -166,10 +165,50 @@ jobs:
 
           echo "Current kernel version: ${{ env.KERNEL_VERSION_FULL }}"
 
+      - name: Remove built-in KernelSU from blue_spark
+        run: |
+          cd kernel_workspace/common
+          
+          echo "Removing built-in KernelSU from blue_spark kernel..."
+          
+          # 删除 KernelSU 目录（如果存在）
+          if [ -d "KernelSU" ]; then
+            echo "Found KernelSU directory, removing..."
+            rm -rf KernelSU
+          fi
+          
+          if [ -d "drivers/kernelsu" ]; then
+            echo "Found drivers/kernelsu directory, removing..."
+            rm -rf drivers/kernelsu
+          fi
+          
+          # 从 Makefile 中移除 kernelsu 引用
+          if [ -f "drivers/Makefile" ]; then
+            sed -i '/kernelsu/d' drivers/Makefile
+            echo "Removed kernelsu from drivers/Makefile"
+          fi
+          
+          # 从 Kconfig 中移除 kernelsu 引用
+          if [ -f "drivers/Kconfig" ]; then
+            sed -i '/source "drivers\/kernelsu\/Kconfig"/d' drivers/Kconfig
+            echo "Removed kernelsu from drivers/Kconfig"
+          fi
+          
+          # 移除 defconfig 中的 KernelSU 配置
+          if [ -f "arch/arm64/configs/gki_defconfig" ]; then
+            sed -i '/CONFIG_KSU/d' arch/arm64/configs/gki_defconfig
+            echo "Removed KernelSU configs from defconfig"
+          fi
+          
+          # 查找并移除其他可能的 KernelSU 相关文件
+          find . -name "*kernelsu*" -type d -exec rm -rf {} + 2>/dev/null || true
+          find . -name "*KernelSU*" -type d -exec rm -rf {} + 2>/dev/null || true
+          
+          echo "Built-in KernelSU removal completed"
+
       - name: Setup xxKSU
         id: ksu_version
         run: |
-          
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
           chmod +x ./sh/*.sh 2>/dev/null || true
 
@@ -179,7 +218,6 @@ jobs:
           echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
 
-          
           cd kernel_workspace/common
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
@@ -198,15 +236,16 @@ jobs:
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
 
-      - name: Integrate xxKSU
+      - name: Integrate xxKSU (optional patch)
         run: |
           cd kernel_workspace/common
           
-          # Check if patch exists before applying
+          # 检查补丁文件是否存在
           if [ -f "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" ]; then
-            patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+            echo "Applying xxKSU integration patch..."
+            patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
           else
-            echo "Warning: xxKSU patch not found, skipping integration patch"
+            echo "No xxKSU patch found, skipping integration patch"
           fi
 
       - name: Inject Kernel configuration
@@ -215,6 +254,10 @@ jobs:
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
+          # 先删除可能存在的旧配置
+          sed -i '/CONFIG_KSU/d' $DEFCONFIG
+
+          # 添加新的 xxKSU 配置
           cat >> $DEFCONFIG <<-'EOF'
           # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
@@ -266,13 +309,14 @@ jobs:
           CONFIG_IP6_NF_NAT=y
           CONFIG_IP6_NF_TARGET_REDIRECT=y
         
+          # xxKSU Configuration
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           # CONFIG_KSU_KPROBES_KSUD is not set
           EOF
 
-          # Check if build.config.gki exists before modifying
+          # 修改构建配置
           if [ -f ./common/build.config.gki ]; then
             sed -i 's/check_defconfig//' ./common/build.config.gki
           fi
