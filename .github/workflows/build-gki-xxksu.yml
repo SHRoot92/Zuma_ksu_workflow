@@ -65,10 +65,15 @@ jobs:
           echo "Downloading LLVM-Clang20 toolchain..."
           mkdir -p clang20
           aria2c -s16 -x16 -k1M \
-            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip" \
+            #"https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip" \
+            "https://github.com/greenforce-project/greenforce_clang/releases/download/20260601/gf-clang-23.0.0-20260601.tar.gz" \
             -o clang.zip
+
+          
           unzip -q clang.zip -d clang20
           rm -f clang.zip
+
+          
 
           echo "Downloading build tools..."
           mkdir -p build-tools
