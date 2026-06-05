@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        
+
       - name: Install dependencies and initialize source repository with LLVM-Clang20 toolchain
         run: |
           rm -rf kernel_workspace
@@ -51,9 +51,6 @@ jobs:
             zip
 
           echo "Downloading GKI source..."
-          #aria2c -s16 -x16 -k1M \
-          #  "https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-android14-6.1-2026-03_r13/common-android14-6.1-2026-03_r13.tar.gz" \
-          #  -o common.tar.gz
           aria2c -s16 -x16 -k1M \
             "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r14.tar.gz" \
             -o common.tar.gz
@@ -62,18 +59,20 @@ jobs:
           tar -xzf common.tar.gz -C common
           rm -f common.tar.gz
 
-          echo "Downloading LLVM-Clang20 toolchain..."
-          mkdir -p clang20
-          aria2c -s16 -x16 -k1M \
-            #"https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip" \
-            "https://github.com/greenforce-project/greenforce_clang/releases/download/20260601/gf-clang-23.0.0-20260601.tar.gz" \
-            -o clang.zip
-
+          echo "Downloading Clang..."
+          wget -qO- "https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_clang.sh" | bash &> /dev/null
           
-          unzip -q clang.zip -d clang20
-          rm -f clang.zip
-
+          CLANG_BIN="$PWD/greenforce-clang/bin"
+          if [ ! -d "$CLANG_BIN" ]; then
+              echo "Error: Clang not found in ${CLANG_BIN}."
+              exit 1
+          fi
           
+          echo "Clang installed successfully:"
+          $CLANG_BIN/clang --version
+          
+          # 保存 Clang 路径到环境变量，供后续步骤使用
+          echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
 
           echo "Downloading build tools..."
           mkdir -p build-tools
@@ -124,9 +123,6 @@ jobs:
           grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
             sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
-      
-
-          
           KSU_MAKEFILE="drivers/kernelsu/Makefile"
           if [ -f "$KSU_MAKEFILE" ]; then
             echo "" >> "$KSU_MAKEFILE"
@@ -137,7 +133,6 @@ jobs:
         run: |
           cd kernel_workspace/common
           patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
-
 
       - name: Inject Kernel configuration
         run: |
@@ -202,7 +197,6 @@ jobs:
           CONFIG_KSU_KPROBES_KSUD=n
           EOF
 
-
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
       - name: Add kernel version suffix
@@ -221,27 +215,40 @@ jobs:
 
       - name: Build kernel
         run: |
-         WORKDIR="$(pwd)"
-         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
-         export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
-    
-         cd kernel_workspace/common
-    
-    
-         ROOT_REAL_PATH=$(readlink -f "$PWD")
-         export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
-    
-         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-         export KBUILD_GENDWARFKSYMS_STABLE=1
-    
-         make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
-         make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
-
-         echo "Kernel build completed."
-
-         df -h
+          WORKDIR="$(pwd)"
+          
+          # 使用之前保存的 Clang 路径
+          if [ -z "$CLANG_BIN" ]; then
+            echo "Error: CLANG_BIN environment variable not set"
+            exit 1
+          fi
+          
+          if [ ! -d "$CLANG_BIN" ]; then
+            echo "Error: Clang directory not found at $CLANG_BIN"
+            exit 1
+          fi
+          
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+          
+          echo "Using Clang from: $CLANG_BIN"
+          clang --version
+          
+          cd kernel_workspace/common
+          
+          ROOT_REAL_PATH=$(readlink -f "$PWD")
+          export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+          
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
+          
+          echo "Kernel build completed."
+          
+          df -h
 
       - name: Clone AnyKernel3 and package kernel
         run: |
