@@ -55,6 +55,7 @@ jobs:
           git clone --depth=1 --branch ${{ env.GS_TAG }} https://github.com/engstk/gs.git common
           
           cd common
+          rm -rf drivers/kernelsu
           
           # 从内核源码动态提取版本号
           echo "Extracting kernel version from source..."
