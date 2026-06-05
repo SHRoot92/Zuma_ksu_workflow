@@ -3,8 +3,6 @@ name: Build GKI + xxKSU
 env:
   TZ: Asia/Shanghai
   ANDROID_VERSION: 'android14'
-  KERNEL_VERSION: '6.1'
-  SUB_VERSION: '126'
   KERNEL_NAME: 'android14-11-gfa1d6308d1fe-ab14691759'
   KBUILD_BUILD_USER: "build-user"
   KBUILD_BUILD_HOST: "build-host"
@@ -59,6 +57,32 @@ jobs:
           mkdir -p common
           tar -xzf common.tar.gz -C common
           rm -f common.tar.gz
+          
+          # 从内核源码动态提取版本号
+          echo "Extracting kernel version from source..."
+          cd common
+          
+          KERNEL_V=$(grep -E '^VERSION = ' Makefile | awk '{print $3}')
+          KERNEL_P=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
+          KERNEL_S=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
+          
+          if [ -z "$KERNEL_V" ] || [ -z "$KERNEL_P" ]; then
+            echo "Error: Failed to extract kernel version from Makefile"
+            cat Makefile | grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ='
+            exit 1
+          fi
+          
+          KERNEL_S=${KERNEL_S:-0}
+          
+          KERNEL_VERSION_FULL="${KERNEL_V}.${KERNEL_P}"
+          KERNEL_VERSION_FULL_WITH_SUB="${KERNEL_V}.${KERNEL_P}.${KERNEL_S}"
+          
+          echo "KERNEL_VERSION=${KERNEL_VERSION_FULL}" >> $GITHUB_ENV
+          echo "KERNEL_VERSION_FULL=${KERNEL_VERSION_FULL_WITH_SUB}" >> $GITHUB_ENV
+          
+          echo "Detected kernel version: ${KERNEL_VERSION_FULL_WITH_SUB}"
+          
+          cd ..
 
           echo "Downloading Clang..."
           mkdir -p clang
@@ -94,7 +118,6 @@ jobs:
           echo "Downloading GCC toolchains..."
           BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${GCC_VERSION}/binrel/"
           
-          # 下载 64 位工具链 (AArch64)
           ARCHIVE64="arm-gnu-toolchain-${GCC_VERSION}-x86_64-aarch64-none-linux-gnu.tar.xz"
           wget --tries=3 --retry-connrefused -q "${BASE_URL}/${ARCHIVE64}" -O gcc64.tar.xz
           if [ ! -f "gcc64.tar.xz" ] || [ ! -s "gcc64.tar.xz" ]; then
@@ -104,12 +127,10 @@ jobs:
           tar -xf gcc64.tar.xz
           rm gcc64.tar.xz
           
-          # 下载 32 位工具链 (AArch32)
           ARCHIVE32="arm-gnu-toolchain-${GCC_VERSION}-x86_64-arm-none-linux-gnueabihf.tar.xz"
           wget --tries=3 --retry-connrefused -q "${BASE_URL}/${ARCHIVE32}" -O gcc32.tar.xz
           if [ ! -f "gcc32.tar.xz" ] || [ ! -s "gcc32.tar.xz" ]; then
             echo "Warning: Failed to download 32-bit GCC toolchain (optional for CONFIG_COMPAT)"
-            echo "Will proceed with 64-bit only"
           else
             tar -xf gcc32.tar.xz
             rm gcc32.tar.xz
@@ -145,7 +166,7 @@ jobs:
           echo "Current disk space:"
           df -h
 
-          echo "Current kernel version: ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
+          echo "Current kernel version: ${{ env.KERNEL_VERSION_FULL }}"
 
       - name: Setup xxKSU
         id: ksu_version
@@ -254,9 +275,11 @@ jobs:
           cd kernel_workspace
 
           echo "Replacing kernel version suffix..."
-
+          
+          echo "Kernel version: ${{ env.KERNEL_VERSION_FULL }}"
+          
           SUFFIX="${{ env.KERNEL_NAME }}"
-
+          
           echo "Current kernel version suffix: $SUFFIX"
 
           for f in ./common/scripts/setlocalversion; do
@@ -279,11 +302,9 @@ jobs:
           
           export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
           
-          # 设置 GCC 工具链路径
           if [ -n "$GCC_PATH" ]; then
             export CROSS_COMPILE="${GCC_PATH}"
             echo "Using custom GCC toolchain: ${CROSS_COMPILE}"
-            # 将 GCC bin 目录加入 PATH
             GCC_BIN_DIR=$(dirname "${GCC_PATH}")
             export PATH="${GCC_BIN_DIR}:$PATH"
           else
@@ -291,7 +312,6 @@ jobs:
             export CROSS_COMPILE="aarch64-linux-gnu-"
           fi
           
-          # 设置 32 位工具链（如果存在）
           if [ -n "$GCC_ARM32_DIR" ] && [ -f "${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-gcc" ]; then
             export CROSS_COMPILE_ARM32="${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-"
             export PATH="${GCC_ARM32_DIR}:$PATH"
@@ -309,7 +329,6 @@ jobs:
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
           
-          # 必须保留！用于 xxKSU 和 GKI 兼容性
           export KBUILD_GENDWARFKSYMS_STABLE=1
           
           export HOSTCC=gcc
@@ -344,7 +363,7 @@ jobs:
           [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
           [ -z "$KSU_VER" ] && KSU_VER="unknown"
 
-          ZIP_NAME="AK3_xxKSU_${KSU_VER}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
+          ZIP_NAME="AK3_${{ env.KERNEL_VERSION_FULL }}_xxKSU+${KSU_VER}.zip"
 
           zip -r9 "../${ZIP_NAME}" ./*
 
@@ -353,7 +372,7 @@ jobs:
           echo "Packaging completed: ${ZIP_NAME}"
 
       - name: Upload AnyKernel3 flashable package
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: AK3_${{ env.KERNEL_VERSION }}_xxKSU
           path: kernel_workspace/AK3_*.zip
