@@ -214,41 +214,46 @@ jobs:
           done
 
       - name: Build kernel
+      - name: Build kernel
         run: |
-          WORKDIR="$(pwd)"
-          
-          # 使用之前保存的 Clang 路径
-          if [ -z "$CLANG_BIN" ]; then
-            echo "Error: CLANG_BIN environment variable not set"
-            exit 1
-          fi
-          
-          if [ ! -d "$CLANG_BIN" ]; then
-            echo "Error: Clang directory not found at $CLANG_BIN"
-            exit 1
-          fi
-          
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
-          
-          echo "Using Clang from: $CLANG_BIN"
-          clang --version
-          
-          cd kernel_workspace/common
-          
-          ROOT_REAL_PATH=$(readlink -f "$PWD")
-          export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
-          
-          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-          export KBUILD_GENDWARFKSYMS_STABLE=1
-          
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
-          
-          echo "Kernel build completed."
-          
-          df -h
+         WORKDIR="$(pwd)"
+    
+         #使用之前保存的 Clang 路径
+         if [ -z "$CLANG_BIN" ]; then
+         echo "Error: CLANG_BIN environment variable not set"
+         exit 1
+         fi
+    
+         if [ ! -d "$CLANG_BIN" ]; then
+         echo "Error: Clang directory not found at $CLANG_BIN"
+         exit 1
+         fi
+    
+         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+    
+         echo "Using Clang from: $CLANG_BIN"
+         clang --version
+    
+         cd kernel_workspace/common
+    
+         ROOT_REAL_PATH=$(readlink -f "$PWD")
+         export KCFLAGS="-O2 -Wno-error -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+    
+         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+         export KBUILD_GENDWARFKSYMS_STABLE=1
+    
+         # 明确指定 HOSTCC 使用系统 gcc，CC 使用 clang
+         export HOSTCC=gcc
+         export CC=clang
+    
+         make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out gki_defconfig
+         make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out Image
+    
+         echo "Kernel build completed."
+    
+         df -h
 
       - name: Clone AnyKernel3 and package kernel
         run: |
