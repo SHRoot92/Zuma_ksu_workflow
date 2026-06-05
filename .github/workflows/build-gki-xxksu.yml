@@ -87,11 +87,14 @@ jobs:
 
           echo "Downloading Clang..."
           mkdir -p clang
-          aria2c -s16 -x16 -k1M \
-            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" \
-          -o clang.tar.gz
+          #aria2c -s16 -x16 -k1M \
+          #  "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" \
+          #-o clang.tar.gz
+          curl -L "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/18b3b8babd15fde3c5c71f43ef71aff72fe2b715/clang-r596125.tar.gz" -o clang.tar.gz
+
           tar -xzf clang.tar.gz -C clang
           rm -f clang.tar.gz
+
           
           if [ -f "$PWD/clang/bin/clang" ]; then
             CLANG_BIN="$PWD/clang/bin"
