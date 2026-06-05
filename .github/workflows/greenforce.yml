@@ -239,6 +239,9 @@ jobs:
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           # CONFIG_KSU_KPROBES_KSUD is not set
+          
+          # 禁用 32位 VDSO 避免 thumbv8a 编译问题
+          # CONFIG_VDSO32 is not set
           EOF
           sed -i 's/check_defconfig//' ./common/build.config.gki
       
@@ -314,6 +317,7 @@ jobs:
           echo "=========================================="
           
           echo "Starting kernel build (GCC for host, Clang for kernel)..."
+          echo "32-bit VDSO has been disabled in config to avoid thumbv8a issues"
           
           # 清理之前可能的配置
           rm -f out/.config
@@ -337,6 +341,30 @@ jobs:
             CROSS_COMPILE= \
             O=out \
             gki_defconfig
+          
+          # 确保 VDSO32 被禁用
+          echo "Disabling VDSO32..."
+          scripts/config --file out/.config --disable VDSO32
+          
+          # 重新生成配置
+          make -j$(nproc --all) \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            ARCH=arm64 \
+            CC=clang \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=ld \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            READELF=llvm-readelf \
+            STRIP=llvm-strip \
+            CROSS_COMPILE= \
+            O=out \
+            olddefconfig
           
           # 验证使用的编译器
           echo "Checking compiler version in config:"
