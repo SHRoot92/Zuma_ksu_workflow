@@ -94,7 +94,7 @@ jobs:
           #tar -xzf clang.tar.gz -C clang
           #rm -f clang.tar.gz
           curl -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz" -o clang.tar.xz
-          tar -xJf clang.tar.xz
+          tar -xJf clang.tar.xz -C clang
           rm -rf clang.tar.xz
 
           
