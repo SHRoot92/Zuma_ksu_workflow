@@ -23,6 +23,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        
       - name: Install dependencies and initialize source repository with LLVM-Clang20 toolchain
         run: |
           rm -rf kernel_workspace
