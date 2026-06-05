@@ -180,7 +180,7 @@ jobs:
       - name: Integrate xxKSU
         run: |
           cd kernel_workspace/common
-          patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+          patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
       
       - name: Inject Kernel configuration
         run: |
@@ -258,35 +258,38 @@ jobs:
       
       - name: Build kernel
         run: |
-         WORKDIR="$(pwd)"
-    
-         export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
-    
-    
-         export CROSS_COMPILE="${GCC_PATH}"
-         export PATH="$(dirname "${GCC_PATH}"):$PATH"
-    
-    
-         if [ -n "$GCC_ARM32_DIR" ]; then
-         export CROSS_COMPILE_ARM32="${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-"
-         export PATH="${GCC_ARM32_DIR}:$PATH"
-         fi
-    
-         cd kernel_workspace/common
-    
-         export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
-         export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-         export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
-         export KBUILD_GENDWARFKSYMS_STABLE=1
-         export KCFLAGS="-O2 -Wno-error -Wno-macro-redefined -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
-    
-    
-         export HOSTCC=gcc
-         export HOSTCXX=g++
-         export CC=clang
-    
-         make -j$(nproc --all) ARCH=arm64 O=out gki_defconfig
-         make -j$(nproc --all) ARCH=arm64 O=out Image
+          WORKDIR="$(pwd)"
+          
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$CLANG_BIN:$PATH"
+          
+          export CROSS_COMPILE="${GCC_PATH}"
+          export PATH="$(dirname "${GCC_PATH}"):$PATH"
+          
+          if [ -n "$GCC_ARM32_DIR" ]; then
+            export CROSS_COMPILE_ARM32="${GCC_ARM32_DIR}/arm-none-linux-gnueabihf-"
+            export PATH="${GCC_ARM32_DIR}:$PATH"
+          fi
+          
+          cd kernel_workspace/common
+          
+          # 定义 ROOT_REAL_PATH
+          ROOT_REAL_PATH=$(readlink -f "$PWD")
+          
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export KCFLAGS="-O2 -Wno-error -Wno-macro-redefined -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+          
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          export CC=clang
+          
+          make -j$(nproc --all) ARCH=arm64 O=out gki_defconfig
+          make -j$(nproc --all) ARCH=arm64 O=out Image
+          
+          echo "Kernel build completed."
+          df -h
       
       - name: Clone AnyKernel3 and package kernel
         run: |
