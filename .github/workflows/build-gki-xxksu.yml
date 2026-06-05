@@ -101,13 +101,17 @@ jobs:
           if [ -f "$PWD/clang/bin/clang" ]; then
             CLANG_BIN="$PWD/clang/bin"
           else
-            CLANG_BIN=$(find "$PWD/clang" -type d -name "bin" | head -1)
-            if [ -z "$CLANG_BIN" ]; then
-              echo "Error: Cannot find bin directory in clang/"
+            # Look specifically for a 'bin' directory that contains the 'clang' executable
+            CLANG_BIN=$(find "$PWD/clang" -type f -name "clang" | grep -v "lib/" | head -n 1)
+            if [ -n "$CLANG_BIN" ]; then
+              CLANG_BIN=$(dirname "$CLANG_BIN")
+            else
+              echo "Error: Cannot find valid bin directory containing clang in clang/"
               ls -la clang/
               exit 1
             fi
           fi
+
           
           if [ ! -f "$CLANG_BIN/clang" ]; then
             echo "Error: clang not found in $CLANG_BIN"
