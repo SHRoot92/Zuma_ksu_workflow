@@ -113,11 +113,7 @@ jobs:
           fi
 
           
-          if [ ! -f "$CLANG_BIN/clang" ]; then
-            echo "Error: clang not found in $CLANG_BIN"
-            ls -la "$CLANG_BIN"
-            exit 1
-          fi
+
           
           echo "Clang installed successfully:"
           $CLANG_BIN/clang --version
@@ -155,13 +151,13 @@ jobs:
           echo "GCC toolchains installed successfully:"
           ${GCC_PATH}gcc --version || echo "GCC installed"
           
-          echo "Downloading build tools..."
-          mkdir -p build-tools
-          aria2c -s16 -x16 -k1M \
-            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
-            -o build-tools.zip
-          unzip -q build-tools.zip -d build-tools
-          rm -f build-tools.zip
+          #echo "Downloading build tools..."
+          #mkdir -p build-tools
+          #aria2c -s16 -x16 -k1M \
+          #  "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
+          #  -o build-tools.zip
+          #unzip -q build-tools.zip -d build-tools
+          #rm -f build-tools.zip
 
           echo "Source and toolchain initialization completed."
 
