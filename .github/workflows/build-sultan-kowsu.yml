@@ -283,14 +283,14 @@ jobs:
             --notes "
             ### 🚀 Build Information (Minimal)
 
-| Component | Details |
-| :--- | :--- |
-| **Kernel Base** | Sultan ($S_TAG) |
-| **Manager** | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) |
-| **KowSU Ver** | \`r$KSU_VER\` |
-| **SuSFS Ver** | \`$SUSFS_VER\` |
-| **Compiler** | GCC 14.2.rel1 |
-| **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
+           | Component | Details |
+           | :--- | :--- |
+           | **Kernel Base** | Sultan ($S_TAG) |
+           | **Manager** | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) |
+           | **KowSU Ver** | \`r$KSU_VER\` |
+           | **SuSFS Ver** | \`$SUSFS_VER\` |
+           | **Compiler** | GCC 14.2.rel1 |
+           | **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
 
             ### 🛠️ Networking Features (Fortress)
             - **TCP Congestion:** BBR (v1) + FQ
