@@ -90,7 +90,7 @@ jobs:
           else
             cd drivers/kernelsu
           fi
-          patch -p1 --forward < ../../.github/patches/10_enable_susfs_for_ksu.patch || true
+          patch -p1 --forward < ../../.github/patches/kowsu/10_enable_susfs_for_ksu.patch || true
 
       - name: Global Defconfig Analysis
         working-directory: sultan
