@@ -193,9 +193,9 @@ jobs:
         run: |
           set -euo pipefail
           DATE=$(date +"%Y.%m.%d")
-          MAX_REV=$(git tag -l "${DATE}-mini-r*" | sed "s/${DATE}-mini-r//" | sort -n | tail -n1)
+          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
           REV=$(( ${MAX_REV:-0} + 1 ))
-          TAG="${DATE}-mini-r${REV}"
+          TAG="${DATE}-r${REV}"
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
