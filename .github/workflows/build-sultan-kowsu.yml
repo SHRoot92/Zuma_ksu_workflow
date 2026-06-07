@@ -209,24 +209,24 @@ jobs:
           fi
 
           cat > release_notes.md <<EOF
-### 🚀 Build Information (Minimal)
+          ### 🚀 Build Information (Minimal)
 
-| Component | Details |
-| :--- | :--- |
-| **Kernel Base** | Sultan ($S_TAG) |
-| **Manager** | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) |
-| **KowSU Ver** | \`r$KSU_VER\` |
-| **SuSFS Ver** | \`$SUSFS_VER\` |
-| **Compiler** | GCC 14.2.rel1 |
-| **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
+          | Component | Details |
+          | :--- | :--- |
+          | **Kernel Base** | Sultan ($S_TAG) |
+          | **Manager** | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) |
+          | **KowSU Ver** | \`r$KSU_VER\` |
+          | **SuSFS Ver** | \`$SUSFS_VER\` |
+          | **Compiler** | GCC 14.2.rel1 |
+          | **SuSFS Branch** | \`sultan-shiba-susfs-minimal\` |
 
-### 🛠️ Networking Features (Fortress)
-- **TCP Congestion:** BBR (v1) + FQ
-- **Routing:** Policy Routing (Table 1066) + IPSet (64k)
-- **Fixes:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
+          ### 🛠️ Networking Features (Fortress)
+          - **TCP Congestion:** BBR (v1) + FQ
+          - **Routing:** Policy Routing (Table 1066) + IPSet (64k)
+          - **Fixes:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
 
-> Built for Pixel 7 (gs201).
-EOF
+          > Built for Pixel 7 (gs201).
+          EOF
 
           gh release create "$TAG" "$ZIP_FILE" \
             --title "Kernel Build Mini — $TAG" \
