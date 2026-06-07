@@ -1,15 +1,11 @@
 name: Build Sultan + KowSU + SUSFS mini
 on:
   workflow_dispatch:
-
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
-
 env:
   ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
@@ -19,7 +15,6 @@ env:
   KSU_REPO: KOWX712/KernelSU
   KSU_BRANCH: master
   GCC_VERSION: "14.2.rel1"
-
 jobs:
   build:
     name: Build gs201 Kernel
@@ -30,12 +25,10 @@ jobs:
       ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
       s_tag: ${{ steps.meta.outputs.s_tag }}
       susfs_ver: ${{ steps.meta.outputs.susfs_ver }}
-
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
       - name: Install GCC
         run: |
           BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
@@ -43,7 +36,6 @@ jobs:
           wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.gz
           tar -xf gcc.tar.gz
           echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
-
       - name: Clone Source
         run: |
           git clone --depth=1 https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
@@ -51,7 +43,6 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
           git clone --depth=1 --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
-
       - name: Metadata
         id: meta
         run: |
@@ -64,21 +55,16 @@ jobs:
             SUSFS_VER=$(grep -E '#define SUSFS_VERSION' "$SUSFS_PATH" | awk -F '"' '{print $2}')
           fi
           SUSFS_VER=${SUSFS_VER:-"unknown"}
-
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
-
           echo "▶ Sultan Kernel Tag: $S_TAG"
           echo "▶ KernelSU Version : $K_VER"
           echo "▶ SuSFS Version    : $SUSFS_VER"
-
-      - name: KSU & Patches
+      - name: Patch Kernel Source (KSU & SuSFS)
         working-directory: sultan
         run: |
           set -euo pipefail
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSU_BRANCH }}"
-
           apply_patch_once() {
             local patch_file="$1"
             if patch -p1 --dry-run < "$patch_file" >/dev/null 2>&1; then
@@ -90,34 +76,32 @@ jobs:
               exit 1
             fi
           }
-
+          # 1. KSU Setup & Base Patches
+          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSU_BRANCH }}"
           apply_patch_once "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
           apply_patch_once "../kernel_patches/sultan/61_scripts_setlocalversion.patch"
           apply_patch_once "../kernel_patches/sultan/62_init_Makefile.patch"
-
-      - name: Setup SuSFS
-        working-directory: sultan
-        run: |
-          set -euo pipefail
+          # 2. SuSFS Setup & Patches
           mkdir -p fs include/linux
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
-
           SUSFS_PATCH="$GITHUB_WORKSPACE/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch"
           KSU_PATCH="$GITHUB_WORKSPACE/.github/patches/kowsu/10_enable_susfs_for_ksu.patch"
+          
           apply_patch_once "$SUSFS_PATCH"
-
-          if [ -d "KernelSU" ]; then
-            cd KernelSU
-          elif [ -d "drivers/kernelsu" ]; then
-            cd drivers/kernelsu
-          else
-            echo "::error::KernelSU directory not found"
-            exit 1
-          fi
-          apply_patch_once "$KSU_PATCH"
-
+          # 在子 Shell 中切换目录打 KSU 补丁，避免污染后续命令的工作路径
+          (
+            if [ -d "KernelSU" ]; then
+              cd KernelSU
+            elif [ -d "drivers/kernelsu" ]; then
+              cd drivers/kernelsu
+            else
+              echo "::error::KernelSU directory not found"
+              exit 1
+            fi
+            apply_patch_once "$KSU_PATCH"
+          )
       - name: Inject Configuration
         working-directory: sultan
         env:
@@ -126,7 +110,6 @@ jobs:
         run: |
           set -euo pipefail
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
-
           ./scripts/config --file out/.config \
             -e CONFIG_KSU \
             -e CONFIG_KSU_SUSFS \
@@ -134,9 +117,7 @@ jobs:
             -e CONFIG_TCP_CONG_BBR \
             -e CONFIG_NET_SCH_FQ \
             -d CONFIG_KSU_DEBUG
-
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig
-
       - name: Build Kernel (Production)
         working-directory: sultan
         env:
@@ -146,29 +127,24 @@ jobs:
           CC: ${{ env.GCC_PATH }}gcc
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
-
       - name: Package
         run: |
           set -euo pipefail
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
-
           CLEAN_S_TAG=$(printf '%s' "${{ steps.meta.outputs.s_tag }}" | sed 's/[^A-Za-z0-9._-]/_/g')
           ZIP_NAME="Sultan-gs201-${CLEAN_S_TAG}-KowSU-SUSFS-mini-${{ steps.meta.outputs.susfs_ver }}+${{ steps.meta.outputs.ksu_ver }}.zip"
-
           (cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*")
           mkdir -p out_zip
           mv "$ZIP_NAME" out_zip/
-
       - name: Upload Zip Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-zip
           path: out_zip/*.zip
           retention-days: 3
           if-no-files-found: error
           compression-level: 0
-
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -178,12 +154,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: kernel-zip
           path: ./artifacts
-
       - name: Tag and Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -196,18 +170,15 @@ jobs:
           MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
           REV=$(( ${MAX_REV:-0} + 1 ))
           TAG="${DATE}-r${REV}"
-
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git tag "$TAG"
           git push origin "$TAG"
-
           ZIP_FILE=$(find ./artifacts -name "*.zip" -type f | head -1)
           if [ -z "$ZIP_FILE" ]; then
             echo "No zip file found!"
             exit 1
           fi
-
           cat > release_notes.md <<EOF
           ### 🚀 Build Information (Minimal)
 
@@ -224,10 +195,8 @@ jobs:
           - **TCP Congestion:** BBR (v1) + FQ
           - **Routing:** Policy Routing (Table 1066) + IPSet (64k)
           - **Fixes:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
-
           > Built for Pixel 7 (gs201).
           EOF
-
           gh release create "$TAG" "$ZIP_FILE" \
             --title "Kernel Build Mini — $TAG" \
             --notes-file release_notes.md
