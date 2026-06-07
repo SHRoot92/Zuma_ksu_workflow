@@ -47,8 +47,11 @@ jobs:
         id: meta
         run: |
           set -euo pipefail
-          git -C sultan fetch --tags --force
-          S_TAG=$(git -C sultan describe --tags --abbrev=0 2>/dev/null || git -C sultan rev-parse --short HEAD)
+          
+          # 优化点：不再使用缓慢的 git fetch --tags
+          # 优先提取 clone 时顺带剥离的本地 tags，若无则直接优雅回退到分支名或短 Hash
+          S_TAG=$(git -C sultan tag --points-at HEAD 2>/dev/null | head -n1 || git -C sultan rev-parse --short HEAD)
+          
           K_VER=$(./sh/get_ksuver.sh "KOWX712" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
           SUSFS_PATH="susfs4ksu/kernel_patches/include/linux/susfs.h"
           if [ -f "$SUSFS_PATH" ]; then
@@ -90,7 +93,6 @@ jobs:
           KSU_PATCH="$GITHUB_WORKSPACE/.github/patches/kowsu/10_enable_susfs_for_ksu.patch"
           
           apply_patch_once "$SUSFS_PATCH"
-          # 在子 Shell 中切换目录打 KSU 补丁，避免污染后续命令的工作路径
           (
             if [ -d "KernelSU" ]; then
               cd KernelSU
