@@ -1,4 +1,4 @@
-name: Build GS201 Kernel with xxKSU and AnyKernel3
+name: Build GS201 Kernel  xxKSU
 
 on:
   workflow_dispatch: # 允许在 GitHub 页面手动点击触发构建
