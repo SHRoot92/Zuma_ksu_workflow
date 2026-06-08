@@ -1,13 +1,21 @@
-name: Build GS201 LineageOS Kernel
+name: Build GS201 Kernel with xxKSU and AnyKernel3
 
 on:
-  workflow_dispatch: # Allows you to manually trigger the build via the GitHub Actions UI
+  workflow_dispatch: # 允许在 GitHub 页面手动点击触发构建
+
+env:
+  TZ: Asia/Shanghai
+  KBUILD_BUILD_USER: "build-user"
+  KBUILD_BUILD_HOST: "build-host"
+  SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
+  KSU_BRANCH: "master"
 
 jobs:
   build-kernel:
     runs-on: ubuntu-22.04
     
     steps:
+      # 1. 清理磁盘空间（针对 Kleaf 庞大的构建缓存）
       - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -16,6 +24,7 @@ jobs:
           sudo rm -rf "/usr/local/share/boost"
           df -h
 
+      # 2. 安装基本依赖工具
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -23,50 +32,178 @@ jobs:
             gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev \
             liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma \
             pinentry-curses python3 python3-pip rsync unzip zip zlib1g-dev \
-            libtinfo5
+            libtinfo5 
 
+      # 3. 全局 Git 身份配置
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
 
+      # 4. 初始化 Repo 工作区并同步代码
       - name: Initialize Repo Workspace
         run: |
           mkdir workspace
           cd workspace
           
-          # Download a local, writable copy of the latest repo tool to bypass permission errors
           mkdir -p bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > bin/repo
           chmod a+x bin/repo
-          
-          # Add local bin to PATH so the workspace uses it explicitly
           export PATH=$PWD/bin:$PATH
           
-          # Initialize using your repository and sync files
           repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: Build GS201 Kernel
+      # 5. 集成并配置 xxKSU
+      - name: Setup and Integrate xxKSU
+        id: ksu_version
+        run: |
+          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          chmod +x ./sh/*.sh 2>/dev/null || true
+
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          echo "KSUVER=$K_VER" >> $GITHUB_ENV
+          echo "xxKSU version: $K_VER"
+          
+          cd workspace/kernel/common
+          echo "Cloning xxKSU..."
+          git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
+
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          KSU_MAKEFILE="drivers/kernelsu/Makefile"
+          if [ -f "$KSU_MAKEFILE" ]; then
+            echo "" >> "$KSU_MAKEFILE"
+            echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
+          fi
+          
+          if [ -f "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" ]; then
+            echo "Applying xxKSU patch..."
+            patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+          fi
+
+      # 6. 注入自定义内核配置 (Defconfig Fragment)
+      - name: Inject Kernel Configuration
         run: |
           cd workspace
-          
-          # Ensure local bin is still in PATH for this step
+          TARGET_DEFCONFIG="kernel/common/arch/arm64/configs/gki_defconfig"
+
+          cat >> $TARGET_DEFCONFIG <<-'EOF'
+          # Core Bootability & Performance
+          CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+          CONFIG_LOG_BUF_SHIFT=21
+          CONFIG_ANDROID_BINDER_IPC_RUST=m
+          CONFIG_TMPFS_XATTR=y
+          CONFIG_TMPFS_POSIX_ACL=y
+
+          # Networking Configuration
+          CONFIG_IP_NF_TARGET_TTL=y
+          CONFIG_IP6_NF_TARGET_HL=y
+          CONFIG_IP6_NF_MATCH_HL=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_NET_SCH_FQ=y
+
+          # IPSet & TProxy Suite
+          CONFIG_IP_SET=y
+          CONFIG_NETFILTER_XT_SET=y
+          CONFIG_IP_SET_MAX=65534
+          CONFIG_IP_SET_BITMAP_IP=y
+          CONFIG_IP_SET_BITMAP_IPMAC=y
+          CONFIG_IP_SET_BITMAP_PORT=y
+          CONFIG_IP_SET_HASH_IP=y
+          CONFIG_IP_SET_HASH_IPMARK=y
+          CONFIG_IP_SET_HASH_IPPORT=y
+          CONFIG_IP_SET_HASH_IPPORTIP=y
+          CONFIG_IP_SET_HASH_IPPORTNET=y
+          CONFIG_IP_SET_HASH_IPMAC=y
+          CONFIG_IP_SET_HASH_MAC=y
+          CONFIG_IP_SET_HASH_NETPORTNET=y
+          CONFIG_IP_SET_HASH_NET=y
+          CONFIG_IP_SET_HASH_NETNET=y
+          CONFIG_IP_SET_HASH_NETPORT=y
+          CONFIG_IP_SET_HASH_NETIFACE=y
+          CONFIG_NETFILTER_XT_TARGET_TPROXY=y
+          CONFIG_NETFILTER_XT_TARGET_REDIRECT=y
+          CONFIG_NETFILTER_XT_MATCH_SOCKET=y
+          CONFIG_NETFILTER_XT_MATCH_MARK=y
+          CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+          CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
+          CONFIG_NETFILTER_XT_MATCH_OWNER=y
+          CONFIG_NETFILTER_XT_MATCH_MAC=y
+          CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+          CONFIG_NETFILTER_XT_MARK=y
+          CONFIG_NETFILTER_XT_CONNMARK=y
+          CONFIG_NETFILTER_XT_TARGET_CONNMARK=y
+          CONFIG_IP6_NF_NAT=y
+          CONFIG_IP6_NF_TARGET_REDIRECT=y
+        
+          # xxKSU Core Configurations
+          CONFIG_KSU=y
+          CONFIG_KSU_EXTRAS=y
+          CONFIG_KSU_LSM_SECURITY_HOOKS=y
+          # CONFIG_KSU_KPROBES_KSUD is not set
+          EOF
+
+          if [ -f "kernel/common/build.config.gki" ]; then
+            sed -i 's/check_defconfig//' kernel/common/build.config.gki
+          fi
+
+      # 7. 运行通过 Bazel 构建编译
+      - name: Build GS201 Kernel via Kleaf
+        run: |
+          cd workspace
           export PATH=$PWD/bin:$PATH
           
-          # Grant execution permissions to the build script linked by the manifest
-          chmod +x build_gs201.sh
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           
-          # Execute the Tensor G2 compilation script
+          chmod +x build_gs201.sh
           ./build_gs201.sh
 
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+      # 8. 克隆 AnyKernel3 并现场打包（包含内核 Image 及所有动态驱动模块 .ko）
+      - name: Package with AnyKernel3
+        run: |
+          # 克隆你指定的 AnyKernel3 仓库
+          git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
+          rm -rf ./AK3/.git
+
+          DIST_DIR="workspace/out/gs201/dist"
+          
+          # 1. 拷贝核心文件 Image
+          if [ -f "$DIST_DIR/Image" ]; then
+            cp "$DIST_DIR/Image" ./AK3/Image
+          else
+            echo "Error: Image not found in $DIST_DIR"
+            ls -la "$DIST_DIR"
+            exit 1
+          fi
+
+          # 2. 拷贝设备树覆盖层 dtbo.img (如果 AnyKernel3 脚本支持刷入 dtbo)
+          if [ -f "$DIST_DIR/dtbo.img" ]; then
+            cp "$DIST_DIR/dtbo.img" ./AK3/dtbo.img
+          fi
+
+          # 3. 动态提取所有编译出来的内核模块 (.ko) 到 AK3 根目录或对应目录
+          # 对于 Tensor 平台，通常把模块直接放在 AK3 的根目录下，或者在 anykernel.sh 中指定安装到 vendor_dlkm
+          echo "Copying vendor kernel modules (*.ko)..."
+          find "$DIST_DIR" -name "*.ko" -exec cp {} ./AK3/ \;
+
+          # 4. 压缩打包
+          cd AK3
+          ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
+          zip -r9 "../${ZIP_NAME}" ./*
+          
+          echo "ZIP_PATH=AK3/${ZIP_NAME}"
+          cd ..
+
+      # 9. 上传生成的 AnyKernel3 卡刷包
+      - name: Upload AnyKernel3 Package
+        uses: actions/upload-artifact@v7
         with:
-          name: gs201-kernel-artifacts
-          path: |
-            workspace/out/gs201/dist/vendor_kernel_boot.img
-            workspace/out/gs201/dist/dtbo.img
-            workspace/out/gs201/dist/*.ko
-            workspace/out/gs201/dist/vendor_dlkm.img
+          name: AnyKernel3_GS201_xxKSU
+          path: AnyKernel3-*.zip
           if-no-files-found: error
