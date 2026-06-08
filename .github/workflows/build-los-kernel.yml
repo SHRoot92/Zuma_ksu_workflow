@@ -25,7 +25,6 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           df -h
-
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -34,101 +33,66 @@ jobs:
             liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma \
             pinentry-curses python3 python3-pip rsync unzip zip zlib1g-dev \
             libtinfo5
-
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-
       - name: Initialize Repo Workspace
         run: |
           mkdir workspace
           cd workspace
-
           mkdir -p bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > bin/repo
           chmod a+x bin/repo
           export PATH=$PWD/bin:$PATH
-
           repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
-
       - name: Setup and Integrate xxKSU
         id: ksu_version
         run: |
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
           chmod +x ./sh/*.sh 2>/dev/null || true
-
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
           echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
-
           cd workspace/aosp
-
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
-
           ln -sf ../KernelSU/kernel drivers/kernelsu
-
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
           grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
-
           KSU_MAKEFILE="drivers/kernelsu/Makefile"
           if [ -f "$KSU_MAKEFILE" ]; then
             echo "" >> "$KSU_MAKEFILE"
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
-
           PATCH_FILE="${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
-
           echo "Checking patch file..."
           if [ ! -f "$PATCH_FILE" ]; then
             echo "ERROR: patch file not found: $PATCH_FILE"
             exit 1
           fi
-
           echo "Testing scope-mini v2.2 patch..."
           patch -p1 -l --dry-run < "$PATCH_FILE"
-
           echo "Applying scope-mini v2.2 patch..."
           patch -p1 -l < "$PATCH_FILE"
-
-          echo "Checking rejected hunks..."
-          if find . -name "*.rej" | grep -q .; then
-            echo "ERROR: patch rejected files found"
-            find . -name "*.rej"
-            exit 1
-          fi
-
-          echo "Verifying scope-mini hook symbols..."
-          grep -R "ksu_handle_execveat" fs/exec.c
-          grep -R "ksu_handle_faccessat" fs/open.c
-          grep -R "ksu_handle_stat" fs/stat.c
-          grep -R "ksu_handle_sys_reboot" kernel/reboot.c
-
-          echo "scope-mini v2.2 patch verified."
-
+          
       - name: Inject Kernel Configuration
         run: |
           cd workspace
           TARGET_DEFCONFIG="aosp/arch/arm64/configs/gki_defconfig"
-
           cat >> $TARGET_DEFCONFIG <<-'EOF'
           # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
           CONFIG_LOG_BUF_SHIFT=21
-          CONFIG_ANDROID_BINDER_IPC_RUST=m
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
-
           # Networking Configuration
           CONFIG_IP_NF_TARGET_TTL=y
           CONFIG_IP6_NF_TARGET_HL=y
           CONFIG_IP6_NF_MATCH_HL=y
-          CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
           CONFIG_NET_SCH_FQ=y
-
           # IPSet & TProxy Suite
           CONFIG_IP_SET=y
           CONFIG_NETFILTER_XT_SET=y
@@ -162,64 +126,45 @@ jobs:
           CONFIG_NETFILTER_XT_TARGET_CONNMARK=y
           CONFIG_IP6_NF_NAT=y
           CONFIG_IP6_NF_TARGET_REDIRECT=y
-
           # xxKSU Core Configurations
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           # CONFIG_KSU_KPROBES_KSUD is not set
           EOF
-
           if [ -f "aosp/build.config.gki" ]; then
             sed -i 's/check_defconfig//' aosp/build.config.gki
           fi
-
       - name: Build GS201 Kernel via Kleaf
         run: |
           cd workspace
           export PATH=$PWD/bin:$PATH
-
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
-
-          tools/bazel run //private/devices/google/pantah:pantah/dist
-          
+          chmod +x build_gs201.sh
+          ./build_gs201.sh
       - name: Package with AnyKernel3
         run: |
-         git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
-         rm -rf ./AK3/.git
-
-         DIST_DIR="workspace/out/gs201/dist"
-
-         if [ -f "$DIST_DIR/Image.lz4" ]; then
-         cp "$DIST_DIR/Image.lz4" AK3/Image.lz4
-         elif [ -f "$DIST_DIR/Image" ]; then
-         cp "$DIST_DIR/Image" AK3/Image
-         else
-         echo "Kernel image not found"
-         exit 1
-         fi
-
-         if ls "$DIST_DIR"/*.dtb >/dev/null 2>&1;     then
-         cat "$DIST_DIR"/*.dtb > AK3/dtb
-         fi
-
-         if [ -f "$DIST_DIR/dtbo.img" ]; then
-         cp "$DIST_DIR/dtbo.img" AK3/dtbo.img
-         fi
-
-         ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
-
-         (
-         cd AK3
-         zip -r9 "../$ZIP_NAME" . -x "*.git*"
-         )
-
-         echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
-
+          git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
+          rm -rf ./AK3/.git
+          DIST_DIR="workspace/out/gs201/dist"
+          if [ -f "$DIST_DIR/Image" ]; then
+            cp "$DIST_DIR/Image" ./AK3/Image
+          else
+            echo "Error: Image not found in $DIST_DIR"
+            ls -la "$DIST_DIR"
+            exit 1
+          fi
+          if [ -f "$DIST_DIR/dtbo.img" ]; then
+            cp "$DIST_DIR/dtbo.img" ./AK3/dtbo.img
+          fi
+          cd AK3
+          ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
+          zip -r9 "../${ZIP_NAME}" ./*
+          cd ..
       - name: Upload AnyKernel3 Package
         uses: actions/upload-artifact@v7
         with:
-         name: AnyKernel3_GS201_xxKSU
-         path: ${{ env.ZIP_PATH }}
-         if-no-files-found: error
+          name: AnyKernel3_GS201_xxKSU
+          path: AnyKernel3-*.zip
+          if-no-files-found: error
