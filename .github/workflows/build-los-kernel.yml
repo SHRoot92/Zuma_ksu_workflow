@@ -1,14 +1,12 @@
 name: Build GS201 LineageOS Kernel
 
 on:
-  workflow_dispatch: # Allows you to trigger the build manually from the GitHub UI
+  workflow_dispatch: # Allows you to manually trigger the build via the GitHub Actions UI
 
 jobs:
   build-kernel:
     runs-on: ubuntu-22.04
     
-    # Bazel kernel builds require significant disk space. 
-    # We use a large standard runner, but need to clean up unneeded pre-installed software.
     steps:
       - name: Free Disk Space
         run: |
@@ -25,7 +23,7 @@ jobs:
             gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev \
             liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma \
             pinentry-curses python3 python3-pip rsync unzip zip zlib1g-dev \
-            libtinfo5 repo
+            libtinfo5
 
       - name: Configure Git
         run: |
@@ -36,16 +34,25 @@ jobs:
         run: |
           mkdir workspace
           cd workspace
-          # Replace 'owner/repo' with your actual repository holding the manifest, 
-          # or point it directly to the manifest file.
-          repo init -u https://github.com/${{ github.repository }}.git -b ${{ github.ref_name }}
           
-          # Sync only what is needed (-c) and optimize network threads
+          # Download a local, writable copy of the latest repo tool to bypass permission errors
+          mkdir -p bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > bin/repo
+          chmod a+x bin/repo
+          
+          # Add local bin to PATH so the workspace uses it explicitly
+          export PATH=$PWD/bin:$PATH
+          
+          # Initialize using your repository and sync files
+          repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Build GS201 Kernel
         run: |
           cd workspace
+          
+          # Ensure local bin is still in PATH for this step
+          export PATH=$PWD/bin:$PATH
           
           # Grant execution permissions to the build script linked by the manifest
           chmod +x build_gs201.sh
