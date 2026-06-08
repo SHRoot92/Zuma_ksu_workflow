@@ -93,7 +93,21 @@ jobs:
           echo "Applying scope-mini v2.2 patch..."
           patch -p1 -l < "$PATCH_FILE"
 
-          
+          echo "Checking rejected hunks..."
+          if find . -name "*.rej" | grep -q .; then
+            echo "ERROR: patch rejected files found"
+            find . -name "*.rej"
+            exit 1
+          fi
+
+          echo "Verifying scope-mini hook symbols..."
+          grep -R "ksu_handle_execveat" fs/exec.c
+          grep -R "ksu_handle_faccessat" fs/open.c
+          grep -R "ksu_handle_stat" fs/stat.c
+          grep -R "ksu_handle_sys_reboot" kernel/reboot.c
+
+          echo "scope-mini v2.2 patch verified."
+
       - name: Inject Kernel Configuration
         run: |
           cd workspace
@@ -111,6 +125,7 @@ jobs:
           CONFIG_IP_NF_TARGET_TTL=y
           CONFIG_IP6_NF_TARGET_HL=y
           CONFIG_IP6_NF_MATCH_HL=y
+          CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
           CONFIG_NET_SCH_FQ=y
 
@@ -172,34 +187,40 @@ jobs:
 
       - name: Package with AnyKernel3
         run: |
-          git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
-          rm -rf ./AK3/.git
+         git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
+         rm -rf ./AK3/.git
 
-          DIST_DIR="workspace/out/gs201/dist"
+         DIST_DIR="workspace/out/gs201/dist"
 
-          if [ -f "$DIST_DIR/Image" ]; then
-            cp "$DIST_DIR/Image" ./AK3/Image
-          else
-            echo "Error: Image not found in $DIST_DIR"
-            ls -la "$DIST_DIR"
-            exit 1
-          fi
+         if [ -f "$DIST_DIR/Image.lz4" ]; then
+         cp "$DIST_DIR/Image.lz4" AK3/Image.lz4
+         elif [ -f "$DIST_DIR/Image" ]; then
+         cp "$DIST_DIR/Image" AK3/Image
+         else
+         echo "Kernel image not found"
+         exit 1
+         fi
 
-          if [ -f "$DIST_DIR/dtbo.img" ]; then
-            cp "$DIST_DIR/dtbo.img" ./AK3/dtbo.img
-          fi
+         if ls "$DIST_DIR"/*.dtb >/dev/null 2>&1;     then
+         cat "$DIST_DIR"/*.dtb > AK3/dtb
+         fi
 
-          echo "Copying vendor kernel modules (*.ko)..."
-          find "$DIST_DIR" -name "*.ko" -exec cp {} ./AK3/ \;
+         if [ -f "$DIST_DIR/dtbo.img" ]; then
+         cp "$DIST_DIR/dtbo.img" AK3/dtbo.img
+         fi
 
-          cd AK3
-          ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
-          zip -r9 "../${ZIP_NAME}" ./*
-          cd ..
+         ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
+
+        (
+        cd AK3
+        zip -r9 "../$ZIP_NAME" . -x "*.git*"
+        )
+
+        echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
 
       - name: Upload AnyKernel3 Package
         uses: actions/upload-artifact@v7
         with:
-          name: AnyKernel3_GS201_xxKSU
-          path: AnyKernel3-*.zip
-          if-no-files-found: error
+         name: AnyKernel3_GS201_xxKSU
+         path: ${{ env.ZIP_PATH }}
+         if-no-files-found: error
