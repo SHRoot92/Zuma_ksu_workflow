@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
       - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -61,6 +64,7 @@ jobs:
           echo "xxKSU version: $K_VER"
 
           cd workspace/aosp
+
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
 
@@ -75,10 +79,34 @@ jobs:
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
 
-          if [ -f "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" ]; then
-            echo "Applying xxKSU patch..."
-            patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+          PATCH_FILE="${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+
+          echo "Checking patch file..."
+          if [ ! -f "$PATCH_FILE" ]; then
+            echo "ERROR: patch file not found: $PATCH_FILE"
+            exit 1
           fi
+
+          echo "Testing scope-mini v2.2 patch..."
+          patch -p1 -l --dry-run < "$PATCH_FILE"
+
+          echo "Applying scope-mini v2.2 patch..."
+          patch -p1 -l < "$PATCH_FILE"
+
+          echo "Checking rejected hunks..."
+          if find . -name "*.rej" | grep -q .; then
+            echo "ERROR: patch rejected files found"
+            find . -name "*.rej"
+            exit 1
+          fi
+
+          echo "Verifying scope-mini hook symbols..."
+          grep -R "ksu_handle_execveat" fs/exec.c
+          grep -R "ksu_handle_faccessat" fs/open.c
+          grep -R "ksu_handle_stat" fs/stat.c
+          grep -R "ksu_handle_sys_reboot" kernel/reboot.c
+
+          echo "scope-mini v2.2 patch verified."
 
       - name: Inject Kernel Configuration
         run: |
