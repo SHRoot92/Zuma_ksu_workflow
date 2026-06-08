@@ -1,0 +1,64 @@
+name: Build GS201 LineageOS Kernel
+
+on:
+  workflow_dispatch: # Allows you to trigger the build manually from the GitHub UI
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    
+    # Bazel kernel builds require significant disk space. 
+    # We use a large standard runner, but need to clean up unneeded pre-installed software.
+    steps:
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          df -h
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib \
+            gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev \
+            liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma \
+            pinentry-curses python3 python3-pip rsync unzip zip zlib1g-dev \
+            libtinfo5 repo
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+      - name: Initialize Repo Workspace
+        run: |
+          mkdir workspace
+          cd workspace
+          # Replace 'owner/repo' with your actual repository holding the manifest, 
+          # or point it directly to the manifest file.
+          repo init -u https://github.com/${{ github.repository }}.git -b ${{ github.ref_name }}
+          
+          # Sync only what is needed (-c) and optimize network threads
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Build GS201 Kernel
+        run: |
+          cd workspace
+          
+          # Grant execution permissions to the build script linked by the manifest
+          chmod +x build_gs201.sh
+          
+          # Execute the Tensor G2 compilation script
+          ./build_gs201.sh
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gs201-kernel-artifacts
+          path: |
+            workspace/out/android14-6.1/dist/boot.img
+            workspace/out/android14-6.1/dist/*.ko
+            workspace/out/android14-6.1/dist/dtbo.img
+          if-no-files-found: warn
