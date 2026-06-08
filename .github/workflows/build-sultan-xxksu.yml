@@ -22,6 +22,8 @@ jobs:
     outputs:
       ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
       s_tag: ${{ steps.meta.outputs.s_tag }}
+      gcc_version: ${{ steps.meta.outputs.gcc_version }}
+      
     steps:
       - uses: actions/checkout@v6
         with:
@@ -32,8 +34,8 @@ jobs:
           BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/"${{ env.GCC_VERSION }}"/binrel/"
           ARCHIVE="arm-gnu-toolchain-"${{ env.GCC_VERSION }}"-x86_64-aarch64-none-linux-gnu.tar.xz"
           
-          wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.gz
-          tar -xf gcc.tar.gz
+          wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
+          tar -xf gcc.tar.xz
           echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
 
       - name: Clone Source
@@ -48,8 +50,23 @@ jobs:
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          
+          # Get GCC version - extract just the version number
+          GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
+          echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
+          
+          # Display all metadata
+          echo "================================"
+          echo "📊 Build Metadata"
+          echo "================================"
+          echo "🏷️  Sultan Tag: $S_TAG"
+          echo "🔧 xxKSU Version: r$K_VER"
+          echo "⚙️  GCC Version: $GCC_VER"
+          echo "================================"
 
       - name: KSU & Patches
         working-directory: sultan
@@ -58,8 +75,6 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
-
-          
 
       - name: Global Defconfig Analysis
         working-directory: sultan
@@ -184,8 +199,12 @@ jobs:
         run: |
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
+          
           ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-xxKSU-r${{ steps.meta.outputs.ksu_ver }}.zip"
+          
+          # Main flashable AnyKernel3 zip
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
+          
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
 
       - name: Upload
@@ -199,25 +218,30 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          
       - uses: actions/download-artifact@v8
         with:
           path: ./artifacts
           merge-multiple: true
+          
       - name: List artifacts (debug)
         run: |
           echo "=== artifacts directory contents ==="
           ls -la ./artifacts/
           echo "=== find zip files ==="
           find ./artifacts -name "*.zip" -type f
+          
       - name: Tag and Release
         env:
           GH_TOKEN: ${{ github.token }}
           KSU_VER: ${{ needs.build.outputs.ksu_ver }}
           S_TAG: ${{ needs.build.outputs.s_tag }}
+          GCC_VER: ${{ needs.build.outputs.gcc_version }}
         run: |
           DATE=$(date +"%Y.%m.%d")
           MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
@@ -229,12 +253,14 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
           
-          # Use find to locate the zip file
+          # Find the zip file
           ZIP_FILE=$(find ./artifacts -name "*.zip" -type f | head -1)
+          
           if [ -z "$ZIP_FILE" ]; then
             echo "No zip file found!"
             exit 1
           fi
+          
           echo "Found zip file: $ZIP_FILE"
           
           gh release create "$TAG" "$ZIP_FILE" \
@@ -246,7 +272,7 @@ jobs:
             | **Kernel Base** | Sultan ($S_TAG) |
             | **Manager** | [backslashxx/KernelSU](https://github.com/backslashxx/KernelSU) |
             | **xxKSU Ver** | \`r$KSU_VER\` |
-            | **Compiler** | GCC 14.2.rel1 |
+            | **Compiler** | GCC $GCC_VER |
             
             ### 🛠️ Networking Features (Fortress)
             - **TCP Congestion:** BBR (v1) + FQ
