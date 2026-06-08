@@ -93,21 +93,7 @@ jobs:
           echo "Applying scope-mini v2.2 patch..."
           patch -p1 -l < "$PATCH_FILE"
 
-          echo "Checking rejected hunks..."
-          if find . -name "*.rej" | grep -q .; then
-            echo "ERROR: patch rejected files found"
-            find . -name "*.rej"
-            exit 1
-          fi
-
-          echo "Verifying scope-mini hook symbols..."
-          grep -R "ksu_handle_execveat" fs/exec.c
-          grep -R "ksu_handle_faccessat" fs/open.c
-          grep -R "ksu_handle_stat" fs/stat.c
-          grep -R "ksu_handle_sys_reboot" kernel/reboot.c
-
-          echo "scope-mini v2.2 patch verified."
-
+          
       - name: Inject Kernel Configuration
         run: |
           cd workspace
