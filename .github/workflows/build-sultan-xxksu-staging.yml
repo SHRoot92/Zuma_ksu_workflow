@@ -50,9 +50,18 @@ jobs:
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
-
+          
+          # Show GCC version info
+          echo "=== GCC Toolchain Information ==="
+          ${GCC_PATH}gcc -v 2>&1
+          echo "================================"
+          
+          # Extract GCC version for output
+          GCC_VER=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
+          echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
 
       - name: KSU & Patches
         working-directory: sultan
