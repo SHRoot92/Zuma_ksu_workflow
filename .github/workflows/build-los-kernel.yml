@@ -45,7 +45,7 @@ jobs:
           curl https://storage.googleapis.com/git-repo-downloads/repo > bin/repo
           chmod a+x bin/repo
           export PATH=$PWD/bin:$PATH
-          repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main
+          repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main -m cheetah.xml
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
       - name: Setup and Integrate xxKSU
         id: ksu_version
