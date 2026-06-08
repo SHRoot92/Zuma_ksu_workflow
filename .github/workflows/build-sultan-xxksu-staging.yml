@@ -50,18 +50,28 @@ jobs:
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
-          
-          # Show GCC version info
-          echo "=== GCC Toolchain Information ==="
-          ${GCC_PATH}gcc -v 2>&1
-          echo "================================"
-          
-          # Extract GCC version for output
-          GCC_VER=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
-          
+    
+          # Get GCC version - extract just the version number
+          GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    
+          # Output variables
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
+    
+          # Display all metadata
+          echo "================================"
+          echo "📊 Build Metadata"
+          echo "================================"
+          echo "🏷️  Sultan Tag: $S_TAG"
+          echo "🔧 xxKSU Version: r$K_VER"
+          echo "⚙️  GCC Version: $GCC_VER"
+          echo "================================"
+          echo ""
+          echo "=== Detailed GCC Information (for debugging) ==="
+          ${GCC_PATH}gcc --version | head -1
+          echo "================================"
 
       - name: KSU & Patches
         working-directory: sultan
