@@ -182,8 +182,8 @@ jobs:
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
 
-          tools/bazel run //private/devices/google/pantah:pantah_dist
-
+          tools/bazel run //private/devices/google/pantah:pantah/dist
+          
       - name: Package with AnyKernel3
         run: |
          git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
