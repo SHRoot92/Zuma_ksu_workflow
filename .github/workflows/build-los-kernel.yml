@@ -65,7 +65,8 @@ jobs:
         with:
           name: gs201-kernel-artifacts
           path: |
-            workspace/out/android14-6.1/dist/boot.img
-            workspace/out/android14-6.1/dist/*.ko
-            workspace/out/android14-6.1/dist/dtbo.img
-          if-no-files-found: warn
+            workspace/out/gs201/dist/vendor_kernel_boot.img
+            workspace/out/gs201/dist/dtbo.img
+            workspace/out/gs201/dist/*.ko
+            workspace/out/gs201/dist/vendor_dlkm.img
+          if-no-files-found: error
