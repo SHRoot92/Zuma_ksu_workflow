@@ -182,8 +182,7 @@ jobs:
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
 
-          chmod +x build_gs201.sh
-          ./build_gs201.sh
+          tools/bazel run //private/devices/google/pantah:pantah_dist
 
       - name: Package with AnyKernel3
         run: |
