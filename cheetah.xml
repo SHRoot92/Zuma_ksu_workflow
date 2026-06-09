@@ -3,11 +3,11 @@
   <remote name="aosp" fetch="https://android.googlesource.com/" review="https://android-review.googlesource.com/" />
   <remote name="github" fetch="https://github.com" />
 
-  <default revision="main-kernel-build-2023" remote="aosp" sync-j="4" />
+  <default revision="main-kernel-build-2024" remote="aosp" sync-j="4" />
 
   <superproject name="kernel/superproject" remote="aosp" revision="common-android14-6.1-2026-06" />
 
-  <project path="build/kernel" name="kernel/build" revision="main-kernel-build-2024">
+  <project path="build/kernel" name="kernel/build">
     <linkfile src="kleaf/bazel.sh" dest="tools/bazel" />
     <linkfile src="build_test.sh" dest="build/build_test.sh" />
     <linkfile src="config.sh" dest="build/config.sh" />
