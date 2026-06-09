@@ -7,9 +7,8 @@
 
   <superproject name="kernel/superproject" remote="aosp" revision="common-android14-6.1-2026-06" />
 
-  <project path="build/kernel" name="kernel/build">
+  <project path="build/kernel" name="kernel/build" revision="main-kernel-build-2024">
     <linkfile src="kleaf/bazel.sh" dest="tools/bazel" />
-    <linkfile src="kleaf/bazel.WORKSPACE" dest="WORKSPACE" />
     <linkfile src="build_test.sh" dest="build/build_test.sh" />
     <linkfile src="config.sh" dest="build/config.sh" />
   </project>
@@ -54,6 +53,6 @@
     <linkfile dest="build_tegu.sh" src="google/tegu/build_tegu.sh" />
     <linkfile dest=".d11.bazelrc" src="google/tegu/device.bazelrc" />
   </project>
-    <project path="private/google-modules" name="LineageOS/android_kernel_google_gs-6.1_google-modules" />
+
+  <project path="private/google-modules" name="LineageOS/android_kernel_google_gs-6.1_google-modules" remote="github" revision="refs/heads/lineage-23.2" />
 </manifest>
-  
