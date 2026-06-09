@@ -25,6 +25,7 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           df -h
+
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -33,10 +34,12 @@ jobs:
             liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzma \
             pinentry-curses python3 python3-pip rsync unzip zip zlib1g-dev \
             libtinfo5
+
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
+
       - name: Initialize Repo Workspace
         run: |
           mkdir workspace
@@ -47,6 +50,7 @@ jobs:
           export PATH=$PWD/bin:$PATH
           repo init -u https://github.com/yapixel/cheetah_kernel_build.git -b main -m cheetah.xml
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
       - name: Setup and Integrate xxKSU
         id: ksu_version
         run: |
@@ -55,7 +59,9 @@ jobs:
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
           echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
-          cd workspace/aosp
+          
+          # 修复：进入实际保存内核核心源码的 common 目录
+          cd workspace/common
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -66,6 +72,8 @@ jobs:
             echo "" >> "$KSU_MAKEFILE"
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
+          
+          # 修复：应用补丁时注意路径层级变化
           PATCH_FILE="${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
           echo "Checking patch file..."
           if [ ! -f "$PATCH_FILE" ]; then
@@ -80,7 +88,8 @@ jobs:
       - name: Inject Kernel Configuration
         run: |
           cd workspace
-          TARGET_DEFCONFIG="aosp/arch/arm64/configs/gki_defconfig"
+          # 修复：在平铺结构中，GKI defconfig 位于 common 目录下
+          TARGET_DEFCONFIG="common/arch/arm64/configs/gki_defconfig"
           cat >> $TARGET_DEFCONFIG <<-'EOF'
           # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
@@ -132,9 +141,10 @@ jobs:
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           # CONFIG_KSU_KPROBES_KSUD is not set
           EOF
-          if [ -f "aosp/build.config.gki" ]; then
-            sed -i 's/check_defconfig//' aosp/build.config.gki
+          if [ -f "common/build.config.gki" ]; then
+            sed -i 's/check_defconfig//' common/build.config.gki
           fi
+
       - name: Build GS201 Kernel via Kleaf
         run: |
           cd workspace
@@ -143,6 +153,7 @@ jobs:
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           chmod +x build_gs201.sh
           ./build_gs201.sh
+
       - name: Package with AnyKernel3
         run: |
           git clone https://github.com/yapixel/AnyKernel3.git --depth=1 AK3
@@ -162,6 +173,7 @@ jobs:
           ZIP_NAME="AnyKernel3-GS201-xxKSU-${{ env.KSUVER }}.zip"
           zip -r9 "../${ZIP_NAME}" ./*
           cd ..
+
       - name: Upload AnyKernel3 Package
         uses: actions/upload-artifact@v7
         with:
