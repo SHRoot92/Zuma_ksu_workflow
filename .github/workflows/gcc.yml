@@ -44,7 +44,12 @@ jobs:
             unzip \
             wget \
             pahole \
-            zip
+            zip \
+            bc \
+            bison \
+            flex \
+            libncurses-dev
+          
           echo "Downloading GKI source..."
           aria2c -s16 -x16 -k1M \
             "https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1-2026-03_r14.tar.gz" \
@@ -53,7 +58,6 @@ jobs:
           tar -xzf common.tar.gz -C common
           rm -f common.tar.gz
           
-          # 从内核源码动态提取版本号
           echo "Extracting kernel version from source..."
           cd common
           
@@ -63,19 +67,15 @@ jobs:
           
           if [ -z "$KERNEL_V" ] || [ -z "$KERNEL_P" ]; then
             echo "Error: Failed to extract kernel version from Makefile"
-            cat Makefile | grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ='
             exit 1
           fi
           
           KERNEL_S=${KERNEL_S:-0}
-          
           KERNEL_VERSION_FULL="${KERNEL_V}.${KERNEL_P}"
           KERNEL_VERSION_FULL_WITH_SUB="${KERNEL_V}.${KERNEL_P}.${KERNEL_S}"
           
           echo "KERNEL_VERSION=${KERNEL_VERSION_FULL}" >> $GITHUB_ENV
           echo "KERNEL_VERSION_FULL=${KERNEL_VERSION_FULL_WITH_SUB}" >> $GITHUB_ENV
-          
-          echo "Detected kernel version: ${KERNEL_VERSION_FULL_WITH_SUB}"
           
           cd ..
           
@@ -84,49 +84,27 @@ jobs:
           
           ARCHIVE64="arm-gnu-toolchain-${GCC_VERSION}-x86_64-aarch64-none-linux-gnu.tar.xz"
           wget --tries=3 --retry-connrefused -q "${BASE_URL}/${ARCHIVE64}" -O gcc64.tar.xz
-          if [ ! -f "gcc64.tar.xz" ] || [ ! -s "gcc64.tar.xz" ]; then
-            echo "Error: Failed to download 64-bit GCC toolchain"
-            exit 1
-          fi
           tar -xf gcc64.tar.xz
           rm gcc64.tar.xz
           
           ARCHIVE32="arm-gnu-toolchain-${GCC_VERSION}-x86_64-arm-none-linux-gnueabihf.tar.xz"
           wget --tries=3 --retry-connrefused -q "${BASE_URL}/${ARCHIVE32}" -O gcc32.tar.xz
-          if [ ! -f "gcc32.tar.xz" ] || [ ! -s "gcc32.tar.xz" ]; then
-            echo "Warning: Failed to download 32-bit GCC toolchain (optional for CONFIG_COMPAT)"
-          else
-            tar -xf gcc32.tar.xz
-            rm gcc32.tar.xz
-            GCC_ARM32_DIR="$PWD/arm-gnu-toolchain-${GCC_VERSION}-x86_64-arm-none-linux-gnueabihf/bin"
-            echo "GCC_ARM32_DIR=${GCC_ARM32_DIR}" >> $GITHUB_ENV
-          fi
+          tar -xf gcc32.tar.xz
+          rm gcc32.tar.xz
           
+          GCC_ARM32_DIR="$PWD/arm-gnu-toolchain-${GCC_VERSION}-x86_64-arm-none-linux-gnueabihf/bin"
           TOOLCHAIN_DIR="$PWD/arm-gnu-toolchain-${GCC_VERSION}-x86_64-aarch64-none-linux-gnu"
           GCC_PATH="${TOOLCHAIN_DIR}/bin"
+          
           echo "GCC_PATH=${GCC_PATH}" >> $GITHUB_ENV
+          echo "GCC_ARM32_DIR=${GCC_ARM32_DIR}" >> $GITHUB_ENV
           
-          echo "GCC toolchains installed successfully:"
-          ${GCC_PATH}/aarch64-none-linux-gnu-gcc --version
-          
-          echo "Downloading build tools..."
-          mkdir -p build-tools
-          aria2c -s16 -x16 -k1M \
-            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
-            -o build-tools.zip
-          unzip -q build-tools.zip -d build-tools
-          rm -f build-tools.zip
-          echo "Source and toolchain initialization completed."
           echo "Removing ABI protection and dirty suffix..."
           rm -f common/android/abi_gki_protected_exports_* || true
           for f in common/scripts/setlocalversion; do
             [ -f "$f" ] && sed -i 's/ -dirty//g' "$f"
-            [ -f "$f" ] && sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
           done
-          echo "Current disk space:"
-          df -h
-          echo "Current kernel version: ${{ env.KERNEL_VERSION_FULL }}"
-      
+
       - name: Setup xxKSU
         id: ksu_version
         run: |
@@ -135,28 +113,24 @@ jobs:
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
           
           echo "ksuver=$K_VER" >> $GITHUB_OUTPUT
-          echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
           
           cd kernel_workspace/common
-          echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
-          grep -q "kernelsu" drivers/Makefile || \
-            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
-          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
-            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          
           KSU_MAKEFILE="drivers/kernelsu/Makefile"
           if [ -f "$KSU_MAKEFILE" ]; then
-            echo "" >> "$KSU_MAKEFILE"
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
-      
+
       - name: Integrate xxKSU
         run: |
           cd kernel_workspace/common
-          patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
-      
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
+
       - name: Inject Kernel configuration
         run: |
           cd kernel_workspace
@@ -165,9 +139,9 @@ jobs:
           # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
           CONFIG_LOG_BUF_SHIFT=21
-          CONFIG_ANDROID_BINDER_IPC_RUST=m
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
+          
           # Networking Configuration
           CONFIG_IP_NF_TARGET_TTL=y
           CONFIG_IP6_NF_TARGET_HL=y
@@ -175,6 +149,7 @@ jobs:
           CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
           CONFIG_NET_SCH_FQ=y
+          
           # IPSet & TProxy Suite
           CONFIG_IP_SET=y
           CONFIG_NETFILTER_XT_SET=y
@@ -209,105 +184,73 @@ jobs:
           CONFIG_NETFILTER_XT_TARGET_CONNMARK=y
           CONFIG_IP6_NF_NAT=y
           CONFIG_IP6_NF_TARGET_REDIRECT=y
-        
+          
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
-          # CONFIG_KSU_KPROBES_KSUD is not set
-
           # CONFIG_CFI_CLANG is not set
           CONFIG_SECTION_MISMATCH_WARN_ONLY=y
-
-
           EOF
-          sed -i 's/check_defconfig//' ./common/build.config.gki
-      
+          
+          sed -i 's/check_defconfig//' ./common/build.config.gki || true
+
       - name: Add kernel version suffix
         run: |
           cd kernel_workspace
-          echo "Replacing kernel version suffix..."
-          
-          echo "Kernel version: ${{ env.KERNEL_VERSION_FULL }}"
-          
           SUFFIX="${{ env.KERNEL_NAME }}"
-          
-          echo "Current kernel version suffix: $SUFFIX"
           for f in ./common/scripts/setlocalversion; do
             [ -f "$f" ] && sed -i "\$s|echo \"\\\$res\"|echo \"-${SUFFIX}\"|" "$f"
           done
-      
+
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
-          
-          # 添加 build-tools 和 GCC 到 PATH
-          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$GCC_PATH:$PATH"
+          export PATH="${{ env.GCC_PATH }}:${{ env.GCC_ARM32_DIR }}:$PATH"
           
           cd kernel_workspace/common
-          
-          ROOT_REAL_PATH=$(readlink -f "$PWD")
           
           export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
           export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
           export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
           export KBUILD_GENDWARFKSYMS_STABLE=1
-          export KCFLAGS="-O2 -Wno-error -Wno-macro-redefined -fdebug-prefix-map=$ROOT_REAL_PATH=. -ffile-prefix-map=$ROOT_REAL_PATH=."
+          export KCFLAGS="-O2 -Wno-error -Wno-macro-redefined"
           
-          echo "=========================================="
-          echo "Using GCC for kernel:"
-          aarch64-none-linux-gnu-gcc --version
-          echo "=========================================="
-          
-          # 使用 GCC 编译内核
+          # 生成编译配置
           make -j$(nproc --all) \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-none-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-none-linux-gnueabihf- \
             O=out \
             gki_defconfig
           
+          # 编译内核镜像
           make -j$(nproc --all) \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-none-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-none-linux-gnueabihf- \
             O=out \
             Image
-          
-          echo "Kernel build completed."
-          
-          # 检查生成的镜像
-          if [ -f "out/arch/arm64/boot/Image" ]; then
-            echo "=========================================="
-            echo "Kernel image found: out/arch/arm64/boot/Image"
-            ls -lh out/arch/arm64/boot/Image
-            file out/arch/arm64/boot/Image
-            echo "=========================================="
-          else
-            echo "Error: Kernel image not found!"
-            exit 1
-          fi
-          
-          df -h
-      
+
       - name: Clone AnyKernel3 and package kernel
         run: |
           cd kernel_workspace
           git clone https://github.com/yapixel/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
-          cd AnyKernel3
-          cp ../common/out/arch/arm64/boot/Image ./Image
-          if [[ ! -f ./Image ]]; then
-            echo "Kernel image not found. The build may have failed."
+          
+          cp ./common/out/arch/arm64/boot/Image ./AnyKernel3/Image
+          if [[ ! -f ./AnyKernel3/Image ]]; then
+            echo "Kernel image not found! Build failed."
             exit 1
           fi
-          KSU_VER="$KSUVER"
-          [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
-          [ -z "$KSU_VER" ] && KSU_VER="unknown"
+          
+          cd AnyKernel3
+          KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
           ZIP_NAME="AK3_${{ env.KERNEL_VERSION_FULL }}_xxKSU+${KSU_VER}.zip"
           zip -r9 "../${ZIP_NAME}" ./*
           echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
-          echo "Packaging completed: ${ZIP_NAME}"
-      
+
       - name: Upload AnyKernel3 flashable package
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: AK3_${{ env.KERNEL_VERSION }}_xxKSU
-          path: kernel_workspace/AK3_*.zip
+          name: AK3_GKI_xxKSU_GCC
+          path: kernel_workspace/*.zip
