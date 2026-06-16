@@ -1,5 +1,5 @@
 From: midori01 <lv@lvlv.lv>
-Date: Tue, 16 Jun 2026 19:46:19 +0900
+Date: Wed, 17 Jun 2026 07:41:50 +0900
 Subject: [PATCH] De-inlined SUSFS hooks for sultan-android14-6.1
 
 ---
@@ -18,9 +18,9 @@ Subject: [PATCH] De-inlined SUSFS hooks for sultan-android14-6.1
  fs/stat.c             |  35 +++++++
  fs/statfs.c           |  45 ++++++++
  kernel/kallsyms.c     |  30 ++++++
- kernel/sys.c          |  33 +++---
+ kernel/sys.c          |  27 ++---
  mm/memory.c           |   8 ++
- 17 files changed, 1072 insertions(+), 16 deletions(-)
+ 17 files changed, 1065 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/input/input.c b/drivers/input/input.c
 index 78be582b5..ca17a064a 100644
@@ -1911,31 +1911,18 @@ index 824bcc7b5..376016cde 100644
  }
  
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 7595dc25d..9a704f3ec 100644
+index 7595dc25d..20bb2884b 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -654,6 +654,9 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+@@ -654,7 +654,6 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
  	return __sys_setuid(uid);
  }
  
-+#ifdef CONFIG_KSU_SUSFS
-+extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
-+#endif
- 
+-
  /*
   * This function implements a generic ability to update ruid, euid,
-@@ -668,6 +671,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
- 	kuid_t kruid, keuid, ksuid;
- 	bool ruid_new, euid_new, suid_new;
- 
-+#ifdef CONFIG_KSU_SUSFS
-+	(void)ksu_handle_setresuid(ruid, euid, suid);
-+#endif
-+
- 	kruid = make_kuid(ns, ruid);
- 	keuid = make_kuid(ns, euid);
- 	ksuid = make_kuid(ns, suid);
-@@ -1298,29 +1305,23 @@ static int override_release(char __user *release, size_t len)
+  * and suid.  This allows you to implement the 4.4 compatible seteuid().
+@@ -1298,29 +1297,23 @@ static int override_release(char __user *release, size_t len)
  	return ret;
  }
  
