@@ -79,8 +79,7 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
-          patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" || true
-          patch -p1 < ../kernel_patches/sultan/sys.c_fix.patch
+          patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/50_add_susfs_in_gki-android14-6.1.patch" ||true
 
           # 2. KSU-side SuSFS
           cd KernelSU
