@@ -181,8 +181,8 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
     
-         # Run olddefconfig and suppress warnings
-         make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
+          # Run olddefconfig and suppress warnings
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
 
       - name: Build Kernel (Production)
         working-directory: sultan
