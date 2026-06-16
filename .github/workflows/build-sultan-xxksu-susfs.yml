@@ -65,8 +65,8 @@ jobs:
           echo "▶ SuSFS Version    : $SUSFS_VER"
           
       - name: Apply Patches KSU + SuSFS (10+50 Logic)
+        working-directory: sultan
         run: |
-          working-directory: sultan
           # 1. Kernel-side SuSFS
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
