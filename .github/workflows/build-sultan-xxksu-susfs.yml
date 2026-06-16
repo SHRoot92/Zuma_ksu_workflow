@@ -63,6 +63,7 @@ jobs:
           echo "▶ Sultan Kernel Tag: $S_TAG"
           echo "▶ KernelSU Version : $K_VER"
           echo "▶ SuSFS Version    : $SUSFS_VER"
+          
       - name: Apply Patches KSU + SuSFS (10+50 Logic)
         run: |
           cd kernel_workspace/common
