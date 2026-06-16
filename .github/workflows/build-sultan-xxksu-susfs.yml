@@ -64,6 +64,14 @@ jobs:
           echo "▶ KernelSU Version : $K_VER"
           echo "▶ SuSFS Version    : $SUSFS_VER"
           
+      - name: KSU & Patches
+        working-directory: sultan
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSU_BRANCH }}"
+          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
+          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
+          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          
       - name: Apply Patches KSU + SuSFS (10+50 Logic)
         working-directory: sultan
         run: |
@@ -71,12 +79,12 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
-          patch -p1 < ../susfs4ksu/kernel_patches/51_deinlined_susfs_hooks_gki-android14-6.1.patch || true
+          patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" || true
           patch -p1 < ../kernel_patches/sultan/sys.c_fix.patch
 
           # 2. KSU-side SuSFS
           cd KernelSU
-          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/kowsu/11_enable_susfs_for_ksu.patch"
+          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"
           
       - name: Inject Configuration (Fortress Deep Unlock)
         working-directory: sultan
