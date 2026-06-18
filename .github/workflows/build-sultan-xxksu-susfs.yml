@@ -68,6 +68,8 @@ jobs:
         working-directory: sultan
         run: |
           curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSU_BRANCH }}"
+          #update ksu version to work with KowSU
+          sed -i 's/CFLAGS_ksu.o += -DKSU_VERSION=32520/CFLAGS_ksu.o += -DKSU_VERSION=32543/g' KernelSU/kernel/Makefile
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
