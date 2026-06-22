@@ -1,0 +1,286 @@
+Name: Build GKI + xxKSU (Neutron Clang)
+
+env:
+  TZ: Asia/Shanghai
+  ANDROID_VERSION: 'android14'
+  KERNEL_NAME: 'android14-11-gfa1d6308d1fe-ab14691759'
+  KBUILD_BUILD_USER: "build-user"
+  KBUILD_BUILD_HOST: "build-host"
+  BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
+  SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
+  KSU_BRANCH: "master"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies and initialize source repository
+        run: |
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+
+          sudo apt-mark hold firefox || true
+          sudo apt-mark hold libc-bin || true
+          sudo apt purge -y man-db || true
+          sudo rm -rf /var/lib/man-db/auto-update || true
+
+          sudo apt update
+          sudo apt-get install -y --no-install-recommends \
+            binutils \
+            python-is-python3 \
+            libssl-dev \
+            libelf-dev \
+            aria2 \
+            zstd \
+            unzip \
+            wget \
+            pahole \
+            zip \
+            patchelf
+
+          echo "Downloading GKI source..."
+          aria2c -s16 -x16 -k1M \
+            "https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-2026-06.tar.gz" \
+            -o common.tar.gz
+            
+          mkdir -p common
+          tar -xzf common.tar.gz  -C common
+          rm -f common.tar.gz
+          
+          echo "Extracting kernel version from source..."
+          cd common
+          
+          KERNEL_V=$(grep -E '^VERSION =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_P=$(grep -E '^PATCHLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_S=$(grep -E '^SUBLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
+          
+          if [ -z "$KERNEL_V" ] || [ -z "$KERNEL_P" ]; then
+            echo "Error: Failed to extract kernel version from Makefile"
+            exit 1
+          fi
+          
+          KERNEL_S=${KERNEL_S:-0}
+          KERNEL_VERSION_FULL="${KERNEL_V}.${KERNEL_P}"
+          KERNEL_VERSION_FULL_WITH_SUB="${KERNEL_V}.${KERNEL_P}.${KERNEL_S}"
+          
+          echo "KERNEL_VERSION=${KERNEL_VERSION_FULL}" >> $GITHUB_ENV
+          echo "KERNEL_VERSION_FULL=${KERNEL_VERSION_FULL_WITH_SUB}" >> $GITHUB_ENV
+          
+          cd ..
+
+          echo "Downloading Neutron Clang via AntMan..."
+          mkdir -p neutron-clang
+          cd neutron-clang
+          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=latest
+          
+          echo "Patching glibc compatibility for Ubuntu runner..."
+          ./antman --patch=glibc
+          
+          CLANG_BIN="$PWD/bin"
+          echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
+          
+          echo "Neutron Clang installed successfully:"
+          $CLANG_BIN/clang --version
+
+          cd ..
+          echo "Source and toolchain initialization completed."
+
+          echo "Removing ABI protection and dirty suffix..."
+          rm -f common/android/abi_gki_protected_exports_* || true
+
+          for f in common/scripts/setlocalversion; do
+            [ -f "$f" ] && sed -i 's/ -dirty//g' "$f"
+            [ -f "$f" ] && sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+      - name: Setup xxKSU
+        id: ksu_version
+        run: |
+          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          chmod +x ./sh/*.sh 2>/dev/null || true
+
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          
+          echo "ksuver=$K_VER" >> $GITHUB_OUTPUT
+          echo "KSUVER=$K_VER" >> $GITHUB_ENV
+          
+          cd kernel_workspace/common
+          git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
+
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || \
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
+            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          KSU_MAKEFILE="drivers/kernelsu/Makefile"
+          if [ -f "$KSU_MAKEFILE" ]; then
+            echo "" >> "$KSU_MAKEFILE"
+            echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
+          fi
+
+      - name: Integrate xxKSU
+        run: |
+          cd kernel_workspace/common
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
+
+      - name: Inject Kernel configuration
+        run: |
+          cd kernel_workspace
+
+          DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
+
+          cat >> $DEFCONFIG <<-'EOF'
+          # Core Bootability & Performance
+          CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+          CONFIG_LOG_BUF_SHIFT=21
+          CONFIG_ANDROID_BINDER_IPC_RUST=m
+          CONFIG_TMPFS_XATTR=y
+          CONFIG_TMPFS_POSIX_ACL=y
+
+          # Networking Configuration
+          CONFIG_IP_NF_TARGET_TTL=y
+          CONFIG_IP6_NF_TARGET_HL=y
+          CONFIG_IP6_NF_MATCH_HL=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_NET_SCH_FQ=y
+
+          # IPSet & TProxy Suite
+          CONFIG_IP_SET=y
+          CONFIG_NETFILTER_XT_SET=y
+          CONFIG_IP_SET_MAX=65534
+          CONFIG_IP_SET_BITMAP_IP=y
+          CONFIG_IP_SET_BITMAP_IPMAC=y
+          CONFIG_IP_SET_BITMAP_PORT=y
+          CONFIG_IP_SET_HASH_IP=y
+          CONFIG_IP_SET_HASH_IPMARK=y
+          CONFIG_IP_SET_HASH_IPPORT=y
+          CONFIG_IP_SET_HASH_IPPORTIP=y
+          CONFIG_IP_SET_HASH_IPPORTNET=y
+          CONFIG_IP_SET_HASH_IPMAC=y
+          CONFIG_IP_SET_HASH_MAC=y
+          CONFIG_IP_SET_HASH_NETPORTNET=y
+          CONFIG_IP_SET_HASH_NET=y
+          CONFIG_IP_SET_HASH_NETNET=y
+          CONFIG_IP_SET_HASH_NETPORT=y
+          CONFIG_IP_SET_HASH_NETIFACE=y
+          CONFIG_NETFILTER_XT_TARGET_TPROXY=y
+          CONFIG_NETFILTER_XT_TARGET_REDIRECT=y
+          CONFIG_NETFILTER_XT_MATCH_SOCKET=y
+          CONFIG_NETFILTER_XT_MATCH_MARK=y
+          CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+          CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
+          CONFIG_NETFILTER_XT_MATCH_OWNER=y
+          CONFIG_NETFILTER_XT_MATCH_MAC=y
+          CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+          CONFIG_NETFILTER_XT_MARK=y
+          CONFIG_NETFILTER_XT_CONNMARK=y
+          CONFIG_NETFILTER_XT_TARGET_CONNMARK=y
+          CONFIG_IP6_NF_NAT=y
+          CONFIG_IP6_NF_NAT_REDIRECT=y
+        
+          CONFIG_KSU=y
+          CONFIG_KSU_EXTRAS=y
+          CONFIG_KSU_LSM_SECURITY_HOOKS=y
+          # CONFIG_KSU_KPROBES_KSUD is not set
+          EOF
+
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+
+      - name: Add kernel version suffix
+        run: |
+          cd kernel_workspace
+          SUFFIX="${{ env.KERNEL_NAME }}"
+          for f in ./common/scripts/setlocalversion; do
+            [ -f "$f" ] && sed -i "\$s|echo \"\\\$res\"|echo \"-${SUFFIX}\"|" "$f"
+          done
+
+      - name: Show build metadata
+        run: |
+         echo "║ KERNEL"
+         echo "║   Version: ${{ env.KERNEL_VERSION_FULL_WITH_SUB }}"
+         echo "║   Suffix:  ${{ env.KERNEL_NAME }}"
+         echo "║ xxKSU:"         
+         echo "║   Version: ${{ env.KSUVER }}"
+         echo "║   Branch:  ${{ env.KSU_BRANCH }}"
+         echo "║ COMPILER:"  
+         $CLANG_BIN/clang --version | head -1 | sed 's/^/║   Clang:  /'
+         echo "║ ENVIRONMENT:"          
+         echo "║   User:   ${{ env.KBUILD_BUILD_USER }}"
+         echo "║   Host:   ${{ env.KBUILD_BUILD_HOST }}"
+         echo "║   Cores:  $(nproc)"
+         
+      - name: Build kernel
+        run: |
+          if [ -z "$CLANG_BIN" ]; then
+            echo "Error: CLANG_BIN environment variable not set"
+            exit 1
+          fi
+          
+          # 将 Neutron Clang 的 bin 目录设为首位
+          export PATH="$CLANG_BIN:$PATH"
+          
+          cd kernel_workspace/common
+          
+          export KCFLAGS="-O3 -Wno-error"
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          
+          # 用 Neutron 编译内核 6.1 (Android 14) 的标准传参
+          make -j$(nproc --all) O=out ARCH=arm64 gki_defconfig
+          make -j$(nproc --all) O=out ARCH=arm64 \
+            CC=clang \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            Image
+          
+          echo "Kernel build completed."
+
+      - name: Clone AnyKernel3 and package kernel
+        run: |
+          cd kernel_workspace
+          git clone https://github.com/yapixel/AnyKernel3 --depth=1
+          rm -rf ./AnyKernel3/.git
+
+          cd AnyKernel3
+          cp ../common/out/arch/arm64/boot/Image ./Image
+
+          if [[ ! -f ./Image ]]; then
+            echo "Kernel image not found. The build may have failed."
+            exit 1
+          fi
+
+          KSU_VER="$KSUVER"
+          [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksu_version.outputs.ksuver }}"
+          [ -z "$KSU_VER" ] && KSU_VER="unknown"
+
+          ZIP_NAME="AK3_${{ env.KERNEL_VERSION_FULL }}_xxKSU+${KSU_VER}.zip"
+          zip -r9 "../${ZIP_NAME}" ./*
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Upload AnyKernel3 flashable package
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: AK3_${{ env.KERNEL_VERSION }}_xxKSU
+          path: kernel_workspace/AK3_*.zip
