@@ -1,4 +1,4 @@
-Name: Build GKI + xxKSU (Neutron Clang)
+name: Build GKI + xxKSU (Neutron Clang)
 
 env:
   TZ: Asia/Shanghai
