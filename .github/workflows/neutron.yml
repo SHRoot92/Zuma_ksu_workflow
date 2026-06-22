@@ -1,4 +1,4 @@
-name: Build GKI + xxKSU (Neutron Clang)
+name: Build GKI + xxKSU
 
 env:
   TZ: Asia/Shanghai
@@ -85,9 +85,26 @@ jobs:
           bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=latest
           
           echo "Patching glibc compatibility for Ubuntu runner..."
-          ./antman --patch=glibc
+          if [ -f "./antman" ]; then
+            chmod +x ./antman
+            ./antman --patch=glibc
+          elif [ -f "./bin/antman" ]; then
+            chmod +x ./bin/antman
+            ./bin/antman --patch=glibc
+          else
+            echo "Warning: antman script not found in current directory, searching..."
+            ANTMAN_PATH=$(find . -name "antman" | head -n 1)
+            if [ -n "$ANTMAN_PATH" ]; then
+              chmod +x "$ANTMAN_PATH"
+              $ANTMAN_PATH --patch=glibc
+            else
+              echo "Error: antman could not be found!"
+              ls -la
+              exit 1
+            fi
+          fi
           
-          CLANG_BIN="$PWD/bin"
+          CLANG_BIN="$(pwd)/bin"
           echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
           
           echo "Neutron Clang installed successfully:"
@@ -144,14 +161,12 @@ jobs:
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
           cat >> $DEFCONFIG <<-'EOF'
-          # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
           CONFIG_LOG_BUF_SHIFT=21
           CONFIG_ANDROID_BINDER_IPC_RUST=m
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
 
-          # Networking Configuration
           CONFIG_IP_NF_TARGET_TTL=y
           CONFIG_IP6_NF_TARGET_HL=y
           CONFIG_IP6_NF_MATCH_HL=y
@@ -159,7 +174,6 @@ jobs:
           CONFIG_TCP_CONG_BBR=y
           CONFIG_NET_SCH_FQ=y
 
-          # IPSet & TProxy Suite
           CONFIG_IP_SET=y
           CONFIG_NETFILTER_XT_SET=y
           CONFIG_IP_SET_MAX=65534
@@ -196,7 +210,6 @@ jobs:
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
-          # CONFIG_KSU_KPROBES_KSUD is not set
           EOF
 
           sed -i 's/check_defconfig//' ./common/build.config.gki
@@ -231,7 +244,6 @@ jobs:
             exit 1
           fi
           
-          # 将 Neutron Clang 的 bin 目录设为首位
           export PATH="$CLANG_BIN:$PATH"
           
           cd kernel_workspace/common
@@ -245,7 +257,6 @@ jobs:
           export HOSTCC=gcc
           export HOSTCXX=g++
           
-          # 用 Neutron 编译内核 6.1 (Android 14) 的标准传参
           make -j$(nproc --all) O=out ARCH=arm64 gki_defconfig
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
