@@ -1,4 +1,4 @@
-name: Build GKI + xxKSU Neutron Clang
+name: Build GKI + xxKSU
 
 env:
   TZ: Asia/Shanghai
@@ -85,24 +85,9 @@ jobs:
           bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=latest
           
           echo "Patching glibc compatibility for Ubuntu runner..."
-          if [ -f "./antman" ]; then
-            chmod +x ./antman
-            ./antman --patch=glibc
-          elif [ -f "./bin/antman" ]; then
-            chmod +x ./bin/antman
-            ./bin/antman --patch=glibc
-          else
-            echo "Warning: antman script not found in current directory, searching..."
-            ANTMAN_PATH=$(find . -name "antman" | head -n 1)
-            if [ -n "$ANTMAN_PATH" ]; then
-              chmod +x "$ANTMAN_PATH"
-              $ANTMAN_PATH --patch=glibc
-            else
-              echo "Error: antman could not be found!"
-              ls -la
-              exit 1
-            fi
-          fi
+          curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
+          chmod +x ./antman
+          ./antman --patch=glibc
           
           CLANG_BIN="$(pwd)/bin"
           echo "CLANG_BIN=${CLANG_BIN}" >> $GITHUB_ENV
