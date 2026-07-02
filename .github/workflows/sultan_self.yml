@@ -39,7 +39,7 @@ jobs:
         id: meta
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
-          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "${{ env.KSU_BRANCH }}" || echo "unknown")
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "master" || echo "unknown")
     
           # Get GCC version - extract just the version number
           GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
