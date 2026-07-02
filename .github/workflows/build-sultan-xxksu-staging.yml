@@ -272,12 +272,12 @@ jobs:
             --notes "
             ### 🚀 Build Information
 
-| Component | Details |
-| :--- | :--- |
-| **Kernel Base** | Sultan ($S_TAG) |
-| **Manager** | https://github.com/backslashxx/KernelSU |
-| **xxKSU Ver** | \`r$KSU_VER\` |
-| **Compiler** | GCC ($GCC_VER) |
+          | Component | Details |
+          | :--- | :--- |
+          | **Kernel Base** | Sultan ($S_TAG) |
+          | **Manager** | https://github.com/backslashxx/KernelSU |
+          | **xxKSU Ver** | \`r$KSU_VER\` |
+          | **Compiler** | GCC ($GCC_VER) |
 
             ### 📦 Release Assets
             - Flashable AnyKernel3 kernel zip
