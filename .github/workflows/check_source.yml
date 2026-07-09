@@ -1,4 +1,4 @@
-name: Dump Pixel Kernel Build Info
+name: Find Pixel Build Files
 
 on:
   workflow_dispatch:
@@ -17,99 +17,104 @@ jobs:
         run: |
           tar -xJf kernel.tar.xz
 
-      - name: Dump source information
+      - name: Scan source tree
         run: |
           cd kernel-pantah-15260412
 
-          mkdir -p dump
+          mkdir dump
 
           {
-            echo "========== ROOT =========="
+            echo "======== ROOT ========"
             ls -lah
 
             echo
-            echo "========== COMMON =========="
+            echo "======== COMMON ========"
             ls -lah common
 
             echo
-            echo "========== COMMON ACK =========="
+            echo "======== ACK ========"
             ls -lah common/ack | head -100
 
             echo
-            echo "========== COMMON GKI =========="
+            echo "======== GKI ========"
             ls -lah common/gki | head -100
-          } > dump/tree.txt
-
-      - name: Dump build scripts
-        run: |
-          cd kernel-pantah-15260412
-
-          mkdir -p dump
-
-          {
-            echo "========== build_gs201.sh =========="
-            cat private/devices/google/gs201/build_gs201.sh
 
             echo
-            echo "========== build_pantah.sh =========="
-            cat private/devices/google/pantah/build_pantah.sh
+            echo "======== BUILD.SH ========"
+            find . -name "build.sh" | sort
 
             echo
-            echo "========== build_dist.sh =========="
-            cat tools/build_dist.sh
-          } > dump/build_scripts.txt
+            echo "======== BUILD_DIST.SH ========"
+            find . -name "build_dist.sh" | sort
 
-      - name: Dump configs
-        run: |
-          cd kernel-pantah-15260412
-
-          mkdir -p dump
-
-          {
-            echo "========== BUILD CONFIG FILES =========="
+            echo
+            echo "======== BUILD CONFIG ========"
             find . -name "build.config*" | sort
 
             echo
-            echo "========== GS201 FILES =========="
-            find private/devices/google/gs201 -type f | sort
+            echo "======== GS201 ========"
+            find . -path "*gs201*" | sort
 
             echo
-            echo "========== PANTAH FILES =========="
-            find private/devices/google/pantah -type f | sort
-          } > dump/config_list.txt
+            echo "======== PANTAH ========"
+            find . -path "*pantah*" | sort
 
-      - name: Dump build.config contents
+          } > dump/scan.txt
+
+      - name: Dump build_dist.sh
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
+
+          FILE=$(find . -name build_dist.sh | head -1)
+
+          echo "FILE=$FILE" > dump/build_dist.txt
+
+          if [ -n "$FILE" ]; then
+            cat "$FILE" >> dump/build_dist.txt
+          fi
+
+      - name: Dump all build configs
+        run: |
+          cd kernel-pantah-15260412
+
+          mkdir -p dump
+
+          touch dump/build_configs.txt
 
           find . -name "build.config*" | while read f
           do
-            echo "==========================" >> dump/build_configs.txt
+            echo "===================================" >> dump/build_configs.txt
             echo "$f" >> dump/build_configs.txt
-            echo "==========================" >> dump/build_configs.txt
+            echo "===================================" >> dump/build_configs.txt
             cat "$f" >> dump/build_configs.txt
+            echo >> dump/build_configs.txt
             echo >> dump/build_configs.txt
           done
 
-      - name: Dump gki config
+      - name: Dump gs201 files
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
 
-          {
-            echo "========== GKI DEFCONFIG =========="
-            sed -n '1,400p' common/ack/arch/arm64/configs/gki_defconfig
+          touch dump/gs201.txt
 
-            echo
-            echo "========== GS201 DEFCONFIG =========="
-            find . -name "*gs201*defconfig*" -exec cat {} \;
-          } > dump/defconfigs.txt
+          find . -path "*gs201*" -type f | while read f
+          do
+            echo "===================================" >> dump/gs201.txt
+            echo "$f" >> dump/gs201.txt
+            echo "===================================" >> dump/gs201.txt
 
-      - name: Upload logs
+            head -200 "$f" >> dump/gs201.txt 2>/dev/null || true
+
+            echo >> dump/gs201.txt
+            echo >> dump/gs201.txt
+          done
+
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: pixel-kernel-dump
-          path: kernel-pantah-15260412/dump/
+          name: pixel-source-dump
+          path: kernel-pantah-15260412/dump/*
