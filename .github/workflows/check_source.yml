@@ -1,4 +1,4 @@
-name: Inspect Pixel Kernel
+name: Dump GS201 Build Script
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Free disk space
+      - name: Free Disk Space
         run: |
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /usr/local/lib/android || true
@@ -16,128 +16,87 @@ jobs:
           docker system prune -af || true
           df -h
 
-      - name: Download kernel source
+      - name: Download Source
         run: |
           wget -O kernel.tar.xz \
             https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
 
           ls -lh kernel.tar.xz
 
-      - name: Extract source
+      - name: Extract Source
         run: |
           mkdir src
-
           tar -xJf kernel.tar.xz -C src
 
-          echo "Extraction complete"
+          ls -lah src
+          ls -lah src/kernel-pantah-15260412
 
-      - name: Discover source tree
+      - name: Show Symlink Info
         run: |
-          {
-            echo "================ ROOT ================="
-            pwd
+          cd src/kernel-pantah-15260412
 
-            echo
-            echo "================ SRC TOP ================="
-            ls -lah src
+          echo "==== build_gs201.sh ===="
+          ls -l build_gs201.sh
 
-            echo
-            echo "================ FIND ================="
-            find src | head -500
+          echo
+          echo "==== build_pantah.sh ===="
+          ls -l build_pantah.sh
 
-          } | tee tree.log
+          echo
+          echo "==== WORKSPACE ===="
+          ls -l WORKSPACE
 
-      - name: Find kernel root
+      - name: Dump GS201 Script
         run: |
-          ROOT="$(find src -name build_gs201.sh | head -n1)"
-
-          echo "BUILD_GS201=$ROOT"
-
-          ROOTDIR="$(dirname "$ROOT")"
-
-          echo "ROOTDIR=$ROOTDIR"
-
-          echo "ROOTDIR=$ROOTDIR" >> $GITHUB_ENV
-
-          {
-            echo "================ ROOTDIR ================="
-            echo "$ROOTDIR"
-
-            echo
-            echo "================ LS ================="
-            ls -lah "$ROOTDIR"
-
-          } | tee root.log
-
-      - name: Dump build_gs201.sh
-        run: |
-          cd "$ROOTDIR"
-
-          {
-            echo "================ FILE ================="
-            file build_gs201.sh
-
-            echo
-            echo "================ LS -L ================="
-            ls -l build_gs201.sh
-
-            echo
-            echo "================ READLINK ================="
-            readlink build_gs201.sh || true
-
-            echo
-            echo "================ REALPATH ================="
-            readlink -f build_gs201.sh || true
-
-            echo
-            echo "================ CONTENT ================="
-            cat build_gs201.sh || true
-
-          } | tee build_gs201.log
-
-      - name: Dump real target
-        run: |
-          cd "$ROOTDIR"
+          cd src/kernel-pantah-15260412
 
           TARGET=$(readlink -f build_gs201.sh)
 
           echo "TARGET=$TARGET"
 
-          {
-            echo "================ TARGET ================="
-            echo "$TARGET"
+          echo
+          echo "================ HEAD ================="
+          head -200 "$TARGET"
 
-            echo
-            echo "================ HEAD 300 ================="
-            head -300 "$TARGET"
+          echo
+          echo "================ FULL ================="
+          cat "$TARGET"
 
-          } | tee target.log
-
-      - name: Search build configs
+      - name: Dump Pantah Script
         run: |
-          cd "$ROOTDIR"
+          cd src/kernel-pantah-15260412
 
-          {
-            echo "================ BUILD CONFIGS ================="
-            find . -name "build.config*" | sort
+          TARGET=$(readlink -f build_pantah.sh)
 
-            echo
-            echo "================ BUILD SCRIPTS ================="
-            find . -name "*.sh" | sort
+          echo "TARGET=$TARGET"
 
-            echo
-            echo "================ BAZEL FILES ================="
-            find . -name "BUILD.bazel" | head -100
+          echo
+          echo "================ HEAD ================="
+          head -200 "$TARGET"
 
-          } | tee buildinfo.log
+          echo
+          echo "================ FULL ================="
+          cat "$TARGET"
 
-      - name: Upload logs
+      - name: Find Build Configs
+        run: |
+          cd src/kernel-pantah-15260412
+
+          echo "==== BUILD CONFIGS ===="
+          find . -name "build.config*" | sort
+
+          echo
+          echo "==== BUILD.SH FILES ===="
+          find . -name "build.sh" | sort
+
+          echo
+          echo "==== GS201 FILES ===="
+          find private/devices/google/gs201 -type f | sort | head -200
+
+      - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-inspect
+          name: gs201-build-script
           path: |
-            tree.log
-            root.log
-            build_gs201.log
-            target.log
-            buildinfo.log
+            src/kernel-pantah-15260412/private/devices/google/gs201/*
+            src/kernel-pantah-15260412/private/devices/google/pantah/*
