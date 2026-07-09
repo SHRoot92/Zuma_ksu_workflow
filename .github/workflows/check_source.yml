@@ -1,0 +1,106 @@
+name: Inspect Pixel Kernel Source
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          docker system prune -af || true
+          df -h
+
+      - name: Download source
+        run: |
+          wget -O kernel.tar.xz \
+            https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
+
+      - name: Extract source
+        run: |
+          mkdir src
+          tar -xJf kernel.tar.xz -C src
+
+      - name: Inspect source tree
+        run: |
+          cd src
+
+          {
+            echo "========== TOP =========="
+            ls -lah
+
+            echo
+            echo "========== DEPTH 2 =========="
+            find . -maxdepth 2 | sort
+
+            echo
+            echo "========== BUILD SCRIPTS =========="
+            find . -maxdepth 1 -name "build*.sh" -type l -o -name "build*.sh"
+
+            echo
+            echo "========== WORKSPACE =========="
+            ls -lah WORKSPACE || true
+
+          } > inspect.log
+
+      - name: Dump build_gs201.sh
+        run: |
+          cd src
+
+          {
+            echo "========== FILE TYPE =========="
+            file build_gs201.sh
+
+            echo
+            echo "========== LS -L =========="
+            ls -l build_gs201.sh
+
+            echo
+            echo "========== READLINK =========="
+            readlink build_gs201.sh || true
+
+            echo
+            echo "========== REALPATH =========="
+            realpath build_gs201.sh || true
+
+            echo
+            echo "========== CONTENT =========="
+            cat build_gs201.sh || true
+
+          } > build_gs201.log
+
+      - name: Dump target script
+        run: |
+          cd src
+
+          TARGET=$(readlink -f build_gs201.sh)
+
+          echo "TARGET=$TARGET"
+
+          {
+            echo "========== TARGET =========="
+            echo "$TARGET"
+
+            echo
+            echo "========== HEAD =========="
+            head -200 "$TARGET"
+
+            echo
+            echo "========== FULL =========="
+            cat "$TARGET"
+
+          } > build_target.log
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-inspection
+          path: |
+            src/inspect.log
+            src/build_gs201.log
+            src/build_target.log
