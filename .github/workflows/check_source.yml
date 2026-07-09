@@ -1,10 +1,10 @@
-name: Find Pixel Build Files
+name: Dump Pixel Configs
 
 on:
   workflow_dispatch:
 
 jobs:
-  inspect:
+  dump:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,113 +13,46 @@ jobs:
           wget -O kernel.tar.xz \
             https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
 
-      - name: Extract
+      - name: Extract source
         run: |
           tar -xJf kernel.tar.xz
 
-      - name: Scan source tree
-        run: |
-          cd kernel-pantah-15260412
-
-          mkdir dump
-
-          {
-            echo "======== ROOT ========"
-            ls -lah
-
-            echo
-            echo "======== COMMON ========"
-            ls -lah common
-
-            echo
-            echo "======== ACK ========"
-            ls -lah common/ack | head -100
-
-            echo
-            echo "======== GKI ========"
-            ls -lah common/gki | head -100
-
-            echo
-            echo "======== BUILD.SH ========"
-            find . -name "build.sh" | sort
-
-            echo
-            echo "======== BUILD_DIST.SH ========"
-            find . -name "build_dist.sh" | sort
-
-            echo
-            echo "======== BUILD CONFIG ========"
-            find . -name "build.config*" | sort
-
-            echo
-            echo "======== GS201 ========"
-            find . -path "*gs201*" | sort
-
-            echo
-            echo "======== PANTAH ========"
-            find . -path "*pantah*" | sort
-
-          } > dump/scan.txt
-
-      - name: Dump build_dist.sh
+      - name: Dump build configs
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
 
-          FILE=$(find . -name build_dist.sh | head -1)
+          echo "===== build.config.gs201 =====" \
+            > dump/build_config_gs201.txt
 
-          echo "FILE=$FILE" > dump/build_dist.txt
+          cat private/devices/google/gs201/build.config.gs201 \
+            >> dump/build_config_gs201.txt
 
-          if [ -n "$FILE" ]; then
-            cat "$FILE" >> dump/build_dist.txt
-          fi
+          echo "===== build.config.pantah =====" \
+            > dump/build_config_pantah.txt
 
-      - name: Find build configs
-        run: |
-         cd kernel-pantah-15260412
+          cat private/devices/google/pantah/build.config.pantah \
+            >> dump/build_config_pantah.txt
 
-         echo "===== build.config files ====="
-
-         find . -name "build.config*" | sort
- 
-         echo
-         echo "===== build scripts ====="
-
-         find . -name "*.sh" | grep -E "build|dist" | sort
-
-         echo
-         echo "===== gs201 ====="
-
-         find . -path "*gs201*" | sort | head -200
-
-         echo
-         echo "===== pantah ====="
-
-         find . -path "*pantah*" | sort | head -200
-        
-      - name: Dump gs201 files
+      - name: Dump defconfigs
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
 
-          touch dump/gs201.txt
+          cat private/devices/google/gs201/gs201_defconfig \
+            > dump/gs201_defconfig.txt
 
-          find . -path "*gs201*" -type f | while read f
-          do
-            echo "===================================" >> dump/gs201.txt
-            echo "$f" >> dump/gs201.txt
-            echo "===================================" >> dump/gs201.txt
+          cat private/devices/google/pantah/pantah_defconfig \
+            > dump/pantah_defconfig.txt
 
-            head -200 "$f" >> dump/gs201.txt 2>/dev/null || true
-
-            echo >> dump/gs201.txt
-            echo >> dump/gs201.txt
-          done
-
-      - name: Upload
+      - name: Upload files
         uses: actions/upload-artifact@v4
         with:
-          name: pixel-source-dump
-          path: kernel-pantah-15260412/dump/*
+          name: pixel-configs
+          path: |
+            kernel-pantah-15260412/dump/build_config_gs201.txt
+            kernel-pantah-15260412/dump/build_config_pantah.txt
+            kernel-pantah-15260412/dump/gs201_defconfig.txt
+            kernel-pantah-15260412/dump/pantah_defconfig.txt
