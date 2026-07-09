@@ -1,4 +1,4 @@
-name: Build blue_spark + xxKSU
+name: Build GKI + xxKSU
 
 env:
   TZ: Asia/Shanghai
@@ -10,7 +10,6 @@ env:
   SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
   KSU_BRANCH: "master"
   GCC_VERSION: "14.2.rel1"
-  GS_TAG: "r263"
 
 on:
   workflow_dispatch:
@@ -48,20 +47,31 @@ jobs:
             unzip \
             wget \
             pahole \
-            zip \
-            git
+            zip
 
-          echo "Cloning kernel source from engstk/gs..."
-          git clone --depth=1 --branch ${{ env.GS_TAG }} https://github.com/engstk/gs.git common
-          
-          cd common
+          echo "Downloading Pixel source..."
+
+          wget -O kernel.tar.xz \
+           https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
+
+          tar -xJf kernel.tar.xz
+          rm -f kernel.tar.xz
+
+          mv kernel-pantah-15260412/common common
+          curl -L \
+            https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gki_defconfig \
+           -o common/arch/arm64/configs/gki_defconfig
+
+
+          rm -rf kernel-pantah-15260412
           
           # 从内核源码动态提取版本号
           echo "Extracting kernel version from source..."
+          cd common
           
-          KERNEL_V=$(grep -E '^VERSION = ' Makefile | awk '{print $3}')
-          KERNEL_P=$(grep -E '^PATCHLEVEL = ' Makefile | awk '{print $3}')
-          KERNEL_S=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}')
+          KERNEL_V=$(grep -E '^VERSION =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_P=$(grep -E '^PATCHLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
+          KERNEL_S=$(grep -E '^SUBLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
           
           if [ -z "$KERNEL_V" ] || [ -z "$KERNEL_P" ]; then
             echo "Error: Failed to extract kernel version from Makefile"
@@ -83,28 +93,33 @@ jobs:
 
           echo "Downloading Clang..."
           mkdir -p clang
-          aria2c -s16 -x16 -k1M \
-            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" \
-          -o clang.tar.gz
-          tar -xzf clang.tar.gz -C clang
-          rm -f clang.tar.gz
+          #aria2c -s16 -x16 -k1M \
+          #  "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r487747c.tar.gz" \
+          #-o clang.tar.gz
+          #curl -L "https://github.com/ZyCromerZ/Clang/releases/download/23.0.0git-20260130-release/Clang-23.0.0git-20260130.tar.gz" -o clang.tar.gz
+          #tar -xzf clang.tar.gz -C clang
+          #rm -f clang.tar.gz
+          curl -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz" -o clang.tar.xz
+          tar -xJf clang.tar.xz -C clang --strip-components=1
+          rm -rf clang.tar.xz
+
           
           if [ -f "$PWD/clang/bin/clang" ]; then
             CLANG_BIN="$PWD/clang/bin"
           else
-            CLANG_BIN=$(find "$PWD/clang" -type d -name "bin" | head -1)
-            if [ -z "$CLANG_BIN" ]; then
-              echo "Error: Cannot find bin directory in clang/"
+            # Look specifically for a 'bin' directory that contains the 'clang' executable
+            CLANG_BIN=$(find "$PWD/clang" -type f -name "clang" | grep -v "lib/" | head -n 1)
+            if [ -n "$CLANG_BIN" ]; then
+              CLANG_BIN=$(dirname "$CLANG_BIN")
+            else
+              echo "Error: Cannot find valid bin directory containing clang in clang/"
               ls -la clang/
               exit 1
             fi
           fi
+
           
-          if [ ! -f "$CLANG_BIN/clang" ]; then
-            echo "Error: clang not found in $CLANG_BIN"
-            ls -la "$CLANG_BIN"
-            exit 1
-          fi
+
           
           echo "Clang installed successfully:"
           $CLANG_BIN/clang --version
@@ -142,13 +157,13 @@ jobs:
           echo "GCC toolchains installed successfully:"
           ${GCC_PATH}gcc --version || echo "GCC installed"
           
-          echo "Downloading build tools..."
-          mkdir -p build-tools
-          aria2c -s16 -x16 -k1M \
-            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
-            -o build-tools.zip
-          unzip -q build-tools.zip -d build-tools
-          rm -f build-tools.zip
+          #echo "Downloading build tools..."
+          #mkdir -p build-tools
+          #aria2c -s16 -x16 -k1M \
+          #  "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
+          #  -o build-tools.zip
+          #unzip -q build-tools.zip -d build-tools
+          #rm -f build-tools.zip
 
           echo "Source and toolchain initialization completed."
 
@@ -165,50 +180,10 @@ jobs:
 
           echo "Current kernel version: ${{ env.KERNEL_VERSION_FULL }}"
 
-      - name: Remove built-in KernelSU from blue_spark
-        run: |
-          cd kernel_workspace/common
-          
-          echo "Removing built-in KernelSU from blue_spark kernel..."
-          
-          # 删除 KernelSU 目录（如果存在）
-          if [ -d "KernelSU" ]; then
-            echo "Found KernelSU directory, removing..."
-            rm -rf KernelSU
-          fi
-          
-          if [ -d "drivers/kernelsu" ]; then
-            echo "Found drivers/kernelsu directory, removing..."
-            rm -rf drivers/kernelsu
-          fi
-          
-          # 从 Makefile 中移除 kernelsu 引用
-          if [ -f "drivers/Makefile" ]; then
-            sed -i '/kernelsu/d' drivers/Makefile
-            echo "Removed kernelsu from drivers/Makefile"
-          fi
-          
-          # 从 Kconfig 中移除 kernelsu 引用
-          if [ -f "drivers/Kconfig" ]; then
-            sed -i '/source "drivers\/kernelsu\/Kconfig"/d' drivers/Kconfig
-            echo "Removed kernelsu from drivers/Kconfig"
-          fi
-          
-          # 移除 defconfig 中的 KernelSU 配置
-          if [ -f "arch/arm64/configs/gki_defconfig" ]; then
-            sed -i '/CONFIG_KSU/d' arch/arm64/configs/gki_defconfig
-            echo "Removed KernelSU configs from defconfig"
-          fi
-          
-          # 查找并移除其他可能的 KernelSU 相关文件
-          find . -name "*kernelsu*" -type d -exec rm -rf {} + 2>/dev/null || true
-          find . -name "*KernelSU*" -type d -exec rm -rf {} + 2>/dev/null || true
-          
-          echo "Built-in KernelSU removal completed"
-
       - name: Setup xxKSU
         id: ksu_version
         run: |
+          
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
           chmod +x ./sh/*.sh 2>/dev/null || true
 
@@ -218,6 +193,7 @@ jobs:
           echo "KSUVER=$K_VER" >> $GITHUB_ENV
           echo "xxKSU version: $K_VER"
 
+          
           cd kernel_workspace/common
           echo "Cloning xxKSU..."
           git clone --depth=1 --branch=${{ env.KSU_BRANCH }} https://github.com/backslashxx/KernelSU.git KernelSU
@@ -236,17 +212,11 @@ jobs:
             echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
           fi
 
-      - name: Integrate xxKSU (optional patch)
+      - name: Integrate xxKSU
         run: |
           cd kernel_workspace/common
           
-          # 检查补丁文件是否存在
-          if [ -f "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" ]; then
-            echo "Applying xxKSU integration patch..."
-            patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
-          else
-            echo "No xxKSU patch found, skipping integration patch"
-          fi
+          patch -p1 -l  < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch"
 
       - name: Inject Kernel configuration
         run: |
@@ -254,10 +224,6 @@ jobs:
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
-          # 先删除可能存在的旧配置
-          sed -i '/CONFIG_KSU/d' $DEFCONFIG
-
-          # 添加新的 xxKSU 配置
           cat >> $DEFCONFIG <<-'EOF'
           # Core Bootability & Performance
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
@@ -309,17 +275,13 @@ jobs:
           CONFIG_IP6_NF_NAT=y
           CONFIG_IP6_NF_TARGET_REDIRECT=y
         
-          # xxKSU Configuration
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
           CONFIG_KSU_LSM_SECURITY_HOOKS=y
           # CONFIG_KSU_KPROBES_KSUD is not set
           EOF
 
-          # 修改构建配置
-          if [ -f ./common/build.config.gki ]; then
-            sed -i 's/check_defconfig//' ./common/build.config.gki
-          fi
+          sed -i 's/check_defconfig//' ./common/build.config.gki
 
       - name: Add kernel version suffix
         run: |
@@ -337,6 +299,27 @@ jobs:
             [ -f "$f" ] && sed -i "\$s|echo \"\\\$res\"|echo \"-${SUFFIX}\"|" "$f"
           done
 
+      - name: Show build metadata
+        run: |
+         
+         echo "║ KERNEL
+         echo "║   Version: ${{ env.KERNEL_VERSION_FULL_WITH_SUB }}"
+         echo "║   Suffix:  ${{ env.KERNEL_NAME }}"
+         
+         echo "║ xxKSU:         
+         echo "║   Version: ${{ env.KSUVER }}"
+         echo "║   Branch:  ${{ env.KSU_BRANCH }}"
+        
+         echo "║ COMPILER:  
+         $CLANG_BIN/clang --version | head -1 | sed 's/^/║   Clang:  /'
+         ${GCC_PATH}gcc --version | head -1 | sed 's/^/║   GCC64:  /'
+         
+         echo "║ ENVIRONMENT:          
+         echo "║   User:   ${{ env.KBUILD_BUILD_USER }}"
+         echo "║   Host:   ${{ env.KBUILD_BUILD_HOST }}"
+         echo "║   Cores:  $(nproc)"
+         
+         
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
