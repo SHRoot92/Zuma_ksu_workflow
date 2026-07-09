@@ -75,24 +75,29 @@ jobs:
             cat "$FILE" >> dump/build_dist.txt
           fi
 
-      - name: Dump all build configs
+      - name: Find build configs
         run: |
-          cd kernel-pantah-15260412
+         cd kernel-pantah-15260412
 
-          mkdir -p dump
+         echo "===== build.config files ====="
 
-          touch dump/build_configs.txt
+         find . -name "build.config*" | sort
+ 
+         echo
+         echo "===== build scripts ====="
 
-          find . -name "build.config*" | while read f
-          do
-            echo "===================================" >> dump/build_configs.txt
-            echo "$f" >> dump/build_configs.txt
-            echo "===================================" >> dump/build_configs.txt
-            cat "$f" >> dump/build_configs.txt
-            echo >> dump/build_configs.txt
-            echo >> dump/build_configs.txt
-          done
+         find . -name "*.sh" | grep -E "build|dist" | sort
 
+         echo
+         echo "===== gs201 ====="
+
+         find . -path "*gs201*" | sort | head -200
+
+         echo
+         echo "===== pantah ====="
+
+         find . -path "*pantah*" | sort | head -200
+        
       - name: Dump gs201 files
         run: |
           cd kernel-pantah-15260412
