@@ -57,7 +57,7 @@ jobs:
           tar -xJf kernel.tar.xz
           rm -f kernel.tar.xz
 
-          mv kernel-pantah-15260412/common common
+          mv kernel-pantah-15260412/common/ack common
           curl -L \
             https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gki_defconfig \
            -o common/arch/arm64/configs/gki_defconfig
