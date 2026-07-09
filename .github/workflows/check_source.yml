@@ -1,4 +1,4 @@
-name: Dump Pixel Configs
+name: Dump Pixel Config Files
 
 on:
   workflow_dispatch:
@@ -13,33 +13,18 @@ jobs:
           wget -O kernel.tar.xz \
             https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
 
-      - name: Extract source
+      - name: Extract
         run: |
           tar -xJf kernel.tar.xz
 
-      - name: Dump build configs
+      - name: Dump target files
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
-
-          echo "===== build.config.gs201 =====" \
-            > dump/build_config_gs201.txt
 
           cat private/devices/google/gs201/build.config.gs201 \
-            >> dump/build_config_gs201.txt
-
-          echo "===== build.config.pantah =====" \
-            > dump/build_config_pantah.txt
-
-          cat private/devices/google/pantah/build.config.pantah \
-            >> dump/build_config_pantah.txt
-
-      - name: Dump defconfigs
-        run: |
-          cd kernel-pantah-15260412
-
-          mkdir -p dump
+            > dump/build.config.gs201.txt
 
           cat private/devices/google/gs201/gs201_defconfig \
             > dump/gs201_defconfig.txt
@@ -47,12 +32,18 @@ jobs:
           cat private/devices/google/pantah/pantah_defconfig \
             > dump/pantah_defconfig.txt
 
-      - name: Upload files
+          find private/devices/google/pantah \
+            -maxdepth 2 \
+            -type f \
+            | sort \
+            > dump/pantah_tree.txt
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pixel-configs
           path: |
-            kernel-pantah-15260412/dump/build_config_gs201.txt
-            kernel-pantah-15260412/dump/build_config_pantah.txt
+            kernel-pantah-15260412/dump/build.config.gs201.txt
             kernel-pantah-15260412/dump/gs201_defconfig.txt
             kernel-pantah-15260412/dump/pantah_defconfig.txt
+            kernel-pantah-15260412/dump/pantah_tree.txt
