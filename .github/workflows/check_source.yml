@@ -1,4 +1,4 @@
-name: Inspect Pixel Kernel Source
+name: Inspect Pixel Kernel
 
 on:
   workflow_dispatch:
@@ -10,97 +10,134 @@ jobs:
     steps:
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
           docker system prune -af || true
           df -h
 
-      - name: Download source
+      - name: Download kernel source
         run: |
           wget -O kernel.tar.xz \
             https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
 
+          ls -lh kernel.tar.xz
+
       - name: Extract source
         run: |
           mkdir src
+
           tar -xJf kernel.tar.xz -C src
 
-      - name: Inspect source tree
+          echo "Extraction complete"
+
+      - name: Discover source tree
         run: |
-          cd src
+          {
+            echo "================ ROOT ================="
+            pwd
+
+            echo
+            echo "================ SRC TOP ================="
+            ls -lah src
+
+            echo
+            echo "================ FIND ================="
+            find src | head -500
+
+          } | tee tree.log
+
+      - name: Find kernel root
+        run: |
+          ROOT="$(find src -name build_gs201.sh | head -n1)"
+
+          echo "BUILD_GS201=$ROOT"
+
+          ROOTDIR="$(dirname "$ROOT")"
+
+          echo "ROOTDIR=$ROOTDIR"
+
+          echo "ROOTDIR=$ROOTDIR" >> $GITHUB_ENV
 
           {
-            echo "========== TOP =========="
-            ls -lah
+            echo "================ ROOTDIR ================="
+            echo "$ROOTDIR"
 
             echo
-            echo "========== DEPTH 2 =========="
-            find . -maxdepth 2 | sort
+            echo "================ LS ================="
+            ls -lah "$ROOTDIR"
 
-            echo
-            echo "========== BUILD SCRIPTS =========="
-            find . -maxdepth 1 -name "build*.sh" -type l -o -name "build*.sh"
-
-            echo
-            echo "========== WORKSPACE =========="
-            ls -lah WORKSPACE || true
-
-          } > inspect.log
+          } | tee root.log
 
       - name: Dump build_gs201.sh
         run: |
-          cd src
+          cd "$ROOTDIR"
 
           {
-            echo "========== FILE TYPE =========="
+            echo "================ FILE ================="
             file build_gs201.sh
 
             echo
-            echo "========== LS -L =========="
+            echo "================ LS -L ================="
             ls -l build_gs201.sh
 
             echo
-            echo "========== READLINK =========="
+            echo "================ READLINK ================="
             readlink build_gs201.sh || true
 
             echo
-            echo "========== REALPATH =========="
-            realpath build_gs201.sh || true
+            echo "================ REALPATH ================="
+            readlink -f build_gs201.sh || true
 
             echo
-            echo "========== CONTENT =========="
+            echo "================ CONTENT ================="
             cat build_gs201.sh || true
 
-          } > build_gs201.log
+          } | tee build_gs201.log
 
-      - name: Dump target script
+      - name: Dump real target
         run: |
-          cd src
+          cd "$ROOTDIR"
 
           TARGET=$(readlink -f build_gs201.sh)
 
           echo "TARGET=$TARGET"
 
           {
-            echo "========== TARGET =========="
+            echo "================ TARGET ================="
             echo "$TARGET"
 
             echo
-            echo "========== HEAD =========="
-            head -200 "$TARGET"
+            echo "================ HEAD 300 ================="
+            head -300 "$TARGET"
+
+          } | tee target.log
+
+      - name: Search build configs
+        run: |
+          cd "$ROOTDIR"
+
+          {
+            echo "================ BUILD CONFIGS ================="
+            find . -name "build.config*" | sort
 
             echo
-            echo "========== FULL =========="
-            cat "$TARGET"
+            echo "================ BUILD SCRIPTS ================="
+            find . -name "*.sh" | sort
 
-          } > build_target.log
+            echo
+            echo "================ BAZEL FILES ================="
+            find . -name "BUILD.bazel" | head -100
+
+          } | tee buildinfo.log
 
       - name: Upload logs
         uses: actions/upload-artifact@v4
         with:
-          name: source-inspection
+          name: kernel-inspect
           path: |
-            src/inspect.log
-            src/build_gs201.log
-            src/build_target.log
+            tree.log
+            root.log
+            build_gs201.log
+            target.log
+            buildinfo.log
