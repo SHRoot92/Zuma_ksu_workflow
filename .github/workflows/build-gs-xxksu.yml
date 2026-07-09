@@ -1,4 +1,4 @@
-name: Build GKI + xxKSU
+name: Build Google Source + xxKSU
 
 env:
   TZ: Asia/Shanghai
