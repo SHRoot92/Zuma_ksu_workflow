@@ -1,4 +1,4 @@
-name: Dump Pixel Build Scripts
+name: Dump Pixel Tree
 
 on:
   workflow_dispatch:
@@ -17,30 +17,20 @@ jobs:
         run: |
           tar -xJf kernel.tar.xz
 
-      - name: Dump build scripts
+      - name: Dump directory tree
         run: |
           cd kernel-pantah-15260412
 
           mkdir -p dump
 
-          cat private/devices/google/gs201/build_gs201.sh \
-            > dump/build_gs201.sh.txt
+          find . -type d | sort > dump/directories.txt
 
-          cat private/devices/google/pantah/build_pantah.sh \
-            > dump/build_pantah.sh.txt
+          find . -type f | sort > dump/files.txt
 
-          cat private/devices/google/pantah/Kconfig.ext.pantah \
-            > dump/Kconfig.ext.pantah.txt
-
-          cat private/devices/google/gs201/Kconfig.ext.gs201 \
-            > dump/Kconfig.ext.gs201.txt
+          find . -type l | sort > dump/symlinks.txt
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: pixel-build-files
-          path: |
-            kernel-pantah-15260412/dump/build_gs201.sh.txt
-            kernel-pantah-15260412/dump/build_pantah.sh.txt
-            kernel-pantah-15260412/dump/Kconfig.ext.pantah.txt
-            kernel-pantah-15260412/dump/Kconfig.ext.gs201.txt
+          name: pixel-tree
+          path: kernel-pantah-15260412/dump/
