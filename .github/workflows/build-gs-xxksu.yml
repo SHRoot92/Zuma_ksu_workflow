@@ -51,19 +51,17 @@ jobs:
 
           echo "Downloading Pixel source..."
 
-          wget -O kernel.tar.xz \
-           https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz
+          wget -O kernel.tar.gz \
+           https://github.com/yapixel/gki-build-assets/releases/download/kernel-pantah-14810637/kernel-pantah-14810637.tar.gz
 
-          tar -xJf kernel.tar.xz
-          rm -f kernel.tar.xz
+          tar -zxvf kernel.tar.gz
+          rm -f kernel.tar.gz
 
-          mv kernel-pantah-15260412/common/ack common
           curl -L \
             https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gki_defconfig \
            -o common/arch/arm64/configs/gki_defconfig
 
 
-          rm -rf kernel-pantah-15260412
           
           # 从内核源码动态提取版本号
           echo "Extracting kernel version from source..."
