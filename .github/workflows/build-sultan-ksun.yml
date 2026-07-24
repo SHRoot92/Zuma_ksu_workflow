@@ -11,7 +11,7 @@ env:
   ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
-  KSN_REPO: yapixel/KSUN
+  KSN_REPO: https://github.com/MirahSyakilla/KSUN
   KSN_BRANCH: susfs+nomount-hookless
   GCC_VERSION: "14.2.rel1"
 
@@ -45,21 +45,6 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
-      - name: Extract Exact KSUN Version
-        id: ksu-version
-        run: |
-          chmod +x sh/extract_ksuver.sh
-          
-          # 根据新脚本契约拆分 owner 和 repo
-          OWNER=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f1)
-          REPO=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f2)
-          
-          # 按照新脚本格式调用：<owner> <repo> [branch]
-          EXACT_VER=$(./sh/extract_ksuver.sh "$OWNER" "$REPO" "${{ env.KSN_BRANCH }}")
-          echo "Extracted KSUN Version: $EXACT_VER"
-          
-          echo "ksu_ver=$EXACT_VER" >> "$GITHUB_OUTPUT"
-          echo "KSU_VERSION=$EXACT_VER" >> "$GITHUB_ENV"
 
       - name: Setup KSUN (Reference Integration Method)
         working-directory: sultan
@@ -94,11 +79,13 @@ jobs:
         id: meta
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
+          K_VER=$(./sh/get_ksuver.sh "MirahSyakilla" "KSUN" "${{ env.KSU_BRANCH }}" || echo "unknown")
           
           # Get GCC version - extract just the version number
           GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
           GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           
+          echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
           
@@ -107,7 +94,7 @@ jobs:
           echo "📊 Build Metadata"
           echo "================================"
           echo "🏷️  Sultan Tag: $S_TAG"
-          echo "🔧 KSUN Version: r${{ env.KSU_VERSION }}"
+          echo "🔧 xxKSU Version: r$K_VER"
           echo "⚙️  GCC Version: $GCC_VER"
           echo "================================"
 
