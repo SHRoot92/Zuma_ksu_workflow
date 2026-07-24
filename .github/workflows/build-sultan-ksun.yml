@@ -1,4 +1,4 @@
-name: Build Sultan + KSUN + SUSFS
+name: Build Sultan + KSUN
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ env:
   ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
-  KSN_REPO: MirahSyakilla/KSUN
+  KSN_REPO: yapixel/KSUN
   KSN_BRANCH: susfs+nomount-hookless
   GCC_VERSION: "14.2.rel1"
 
@@ -20,7 +20,7 @@ jobs:
     name: Build gs201 Kernel
     runs-on: ubuntu-latest
     outputs:
-      ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
+      ksu_ver: ${{ steps.ksu-version.outputs.ksu_ver }}
       s_tag: ${{ steps.meta.outputs.s_tag }}
       gcc_version: ${{ steps.meta.outputs.gcc_version }}
       
@@ -45,17 +45,43 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
+      - name: KSUN & Patches
+        working-directory: sultan
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/${{ env.KSN_REPO }}/${{ env.KSN_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSN_BRANCH }}"
+          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
+          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
+          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+
+      - name: Extract KSU Version Info
+        id: ksu-version
+        shell: bash
+        working-directory: sultan/kernel/kernelsu
+        run: |
+          # Fetch branch for version info (tags, commits, etc.)
+          git fetch --depth=50 origin "${{ env.KSN_BRANCH }}" 2>/dev/null || true
+          
+          # Extract and export KSU version info from target branch
+          KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+          KSU_GIT_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
+          KSU_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+          
+          echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
+          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+          echo "KSU_COMMIT=$KSU_COMMIT" >> $GITHUB_ENV
+          
+          echo "ksu_ver=$KSU_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Metadata
         id: meta
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
-          K_VER=$(./sh/get_ksuver.sh "yapixel" "KSUN" "${{ env.KSN_BRANCH }}" || echo "unknown")
           
           # Get GCC version - extract just the version number
           GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
           GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           
-          echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
           
@@ -64,17 +90,9 @@ jobs:
           echo "📊 Build Metadata"
           echo "================================"
           echo "🏷️  Sultan Tag: $S_TAG"
-          echo "🔧 KSUN Version: r$K_VER"
+          echo "🔧 KSUN Version: r$KSU_VERSION ($KSU_COMMIT)"
           echo "⚙️  GCC Version: $GCC_VER"
           echo "================================"
-
-      - name: KSUN & Patches
-        working-directory: sultan
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSN_REPO }}/${{ env.KSN_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSN_BRANCH }}"
-          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
-          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
-          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
 
       - name: Global Defconfig Analysis
         working-directory: sultan
@@ -192,7 +210,7 @@ jobs:
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
           cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
           
-          ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-KSUN-r${{ steps.meta.outputs.ksu_ver }}.zip"
+          ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-KSUN-r${{ env.KSU_VERSION }}.zip"
           
           # Main flashable AnyKernel3 zip
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
@@ -231,7 +249,6 @@ jobs:
       - name: Tag and Release
         env:
           GH_TOKEN: ${{ github.token }}
-          KSU_VER: ${{ needs.build.outputs.ksu_ver }}
           S_TAG: ${{ needs.build.outputs.s_tag }}
           GCC_VER: ${{ needs.build.outputs.gcc_version }}
         run: |
@@ -263,7 +280,7 @@ jobs:
             | :--- | :--- |
             | **Kernel Base** | Sultan ($S_TAG) |
             | **Manager** | [yapixel/KSUN](https://github.com/yapixel/KSUN) |
-            | **KSUN Ver** | \`r$KSU_VER\` |
+            | **KSUN Ver** | \`r$KSU_VERSION\` ($KSU_COMMIT) |
             | **Compiler** | GCC $GCC_VER |
             
             ### 🛠️ Networking Features (Fortress)
