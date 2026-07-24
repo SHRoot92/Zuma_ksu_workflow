@@ -170,26 +170,19 @@ jobs:
 
           # Add KSUN configs - SUSFS and Nomount are built-in
           cat >> "$DEFCONFIG" << 'EOF'
-          # KSUN Core
           CONFIG_KSU=y
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
           CONFIG_HEADERS_INSTALL=n
           # CONFIG_KSU_DEBUG is not set
-          
-          # KSUN Features (built into KSUN source)
           CONFIG_KSU_KPROBES_HOOK=y
           # CONFIG_KSU_TAMPER_SYSCALL_TABLE is not set
           CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
-          
-          # SUSFS (built-in to KSUN)
           CONFIG_KSU_KPROBES_SUSFS=y
-          
-          # Nomount (built-in to KSUN)
           CONFIG_KSU_KPROBES_NOMOUNT=y
           
-          # Networking features
+          
           CONFIG_NETFILTER_ADVANCED=y
           CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
           CONFIG_TCP_CONG_ADVANCED=y
