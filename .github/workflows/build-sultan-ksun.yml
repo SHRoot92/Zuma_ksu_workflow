@@ -11,7 +11,7 @@ env:
   ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
   PATCHES_REPO: https://github.com/yapixel/kernel_patches
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
-  KSN_REPO: yapixel/KSUN
+  KSN_REPO: MirahSyakilla/KSUN
   KSN_BRANCH: susfs+nomount-hookless
   GCC_VERSION: "14.2.rel1"
 
