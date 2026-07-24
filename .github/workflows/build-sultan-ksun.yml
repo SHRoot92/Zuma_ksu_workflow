@@ -45,11 +45,25 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
+      - name: Extract Exact KSUN Version
+        id: ksu-version
+        run: |
+          chmod +x sh/extract_ksuver.sh
+          # 解析 KSN_REPO (格式: owner/repo)
+          OWNER=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f1)
+          REPO=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f2)
+          
+          EXACT_VER=$(./sh/extract_ksuver.sh "$OWNER" "$REPO" "${{ env.KSN_BRANCH }}")
+          echo "Extracted KSUN Version: $EXACT_VER"
+          
+          echo "ksu_ver=$EXACT_VER" >> "$GITHUB_OUTPUT"
+          echo "KSU_VERSION=$EXACT_VER" >> "$GITHUB_ENV"
+
       - name: Setup KSUN (Reference Integration Method)
         working-directory: sultan
         run: |
           echo "[+] Cloning KSUN repository..."
-          git clone  --branch "${{ env.KSN_BRANCH }}" "https://github.com/${{ env.KSN_REPO }}.git" KernelSU
+          git clone --depth=1 --branch "${{ env.KSN_BRANCH }}" "https://github.com/${{ env.KSN_REPO }}.git" KernelSU
           
           echo "[+] Setting up symlink and driver configurations..."
           ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -66,27 +80,13 @@ jobs:
           cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
           cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
 
+          echo "[+] Fixing ksu_flush_icache macro compilation error..."
+          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou((void *)(start), (void *)(end))/' KernelSU/kernel/hook/arm64/patch_memory.c
+
           echo "[+] Applying Sultan-specific patches..."
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch || true
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch || true
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || true
-
-      - name: Extract KSU Version Info
-        id: ksu-version
-        shell: bash
-        working-directory: sultan/KernelSU
-        run: |
-          # 提取并导出 KSU 版本信息
-          KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null || echo "0")
-          KSU_GIT_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
-          KSU_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          KSU_VERSION=$((30000 + KSU_GIT_VERSION))
-          
-          echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
-          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
-          echo "KSU_COMMIT=$KSU_COMMIT" >> $GITHUB_ENV
-          
-          echo "ksu_ver=$KSU_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Metadata
         id: meta
@@ -105,7 +105,7 @@ jobs:
           echo "📊 Build Metadata"
           echo "================================"
           echo "🏷️  Sultan Tag: $S_TAG"
-          echo "🔧 KSUN Version: r$KSU_VERSION ($KSU_COMMIT)"
+          echo "🔧 KSUN Version: r${{ env.KSU_VERSION }}"
           echo "⚙️  GCC Version: $GCC_VER"
           echo "================================"
 
@@ -266,6 +266,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           S_TAG: ${{ needs.build.outputs.s_tag }}
           GCC_VER: ${{ needs.build.outputs.gcc_version }}
+          KSU_VER: ${{ needs.build.outputs.ksu_ver }}
         run: |
           DATE=$(date +"%Y.%m.%d")
           MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
@@ -295,7 +296,7 @@ jobs:
             | :--- | :--- |
             | **Kernel Base** | Sultan ($S_TAG) |
             | **Manager** | [yapixel/KSUN](https://github.com/yapixel/KSUN) |
-            | **KSUN Ver** | \`r$KSU_VERSION\` ($KSU_COMMIT) |
+            | **KSUN Ver** | \`r$KSU_VER\` |
             | **Compiler** | GCC $GCC_VER |
             
             ### 🛠️ Networking Features (Fortress)
