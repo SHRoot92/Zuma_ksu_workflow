@@ -50,8 +50,12 @@ jobs:
         run: |
           chmod +x sh/extract_ksuver.sh
           
-          # 正确按照脚本源码参数调用：<repo_url> <makefile_path> <src_dir> [branch]
-          EXACT_VER=$(./sh/extract_ksuver.sh "https://github.com/${{ env.KSN_REPO }}.git" "kernel/Makefile" "kernel" "${{ env.KSN_BRANCH }}")
+          # 根据新脚本契约拆分 owner 和 repo
+          OWNER=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f1)
+          REPO=$(echo "${{ env.KSN_REPO }}" | cut -d'/' -f2)
+          
+          # 按照新脚本格式调用：<owner> <repo> [branch]
+          EXACT_VER=$(./sh/extract_ksuver.sh "$OWNER" "$REPO" "${{ env.KSN_BRANCH }}")
           echo "Extracted KSUN Version: $EXACT_VER"
           
           echo "ksu_ver=$EXACT_VER" >> "$GITHUB_OUTPUT"
