@@ -1,0 +1,402 @@
+name: Build GKI + KSUN
+
+env:
+  TZ: Asia/Shanghai
+  ANDROID_VERSION: 'android14'
+  KERNEL_VERSION: '6.1'
+  SUB_VERSION: '126'
+  KERNEL_NAME: 'android14-11-gfa1d6308d1fe-ab14691759'
+  KBUILD_BUILD_USER: "build-user"
+  KBUILD_BUILD_HOST: "build-host"
+  BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
+  SCRIPTS_REPO: "https://github.com/TheSillyOk/sh"
+  KSN_REPO: "https://github.com/MirahSyakilla/KSUN"
+  KSN_BRANCH: "susfs+nomount-hookless"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install dependencies and initialize source repository with LLVM-Clang20 toolchain
+        run: |
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+
+          sudo apt-mark hold firefox || true
+          sudo apt-mark hold libc-bin || true
+          sudo apt purge -y man-db || true
+          sudo rm -rf /var/lib/man-db/auto-update || true
+
+          sudo apt update
+          sudo apt-get install -y --no-install-recommends \
+            binutils \
+            python-is-python3 \
+            libssl-dev \
+            libelf-dev \
+            aria2 \
+            zstd \
+            unzip \
+            wget \
+            pahole \
+            zip \
+            patch \
+            git
+
+          echo "Downloading GKI source..."
+          aria2c -s16 -x16 -k1M \
+            "https://github.com/yapixel/gki-build-assets/releases/download/kernel-archive-android14-6.1-2026-03_r13/common-android14-6.1-2026-03_r13.tar.gz" \
+            -o common.tar.gz
+
+          mkdir -p common
+          tar -xzf common.tar.gz -C common
+          rm -f common.tar.gz
+
+          echo "Downloading LLVM-Clang20 toolchain..."
+          mkdir -p clang20
+          aria2c -s16 -x16 -k1M \
+            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip" \
+            -o clang.zip
+          unzip -q clang.zip -d clang20
+          rm -f clang.zip
+
+          echo "Downloading build tools..."
+          mkdir -p build-tools
+          aria2c -s16 -x16 -k1M \
+            "https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang19-r536225/build-tools.zip" \
+            -o build-tools.zip
+          unzip -q build-tools.zip -d build-tools
+          rm -f build-tools.zip
+
+          echo "Source and toolchain initialization completed."
+
+          echo "Removing ABI protection and dirty suffix..."
+          rm -f common/android/abi_gki_protected_exports_* || true
+
+          for f in common/scripts/setlocalversion; do
+            [ -f "$f" ] && sed -i 's/ -dirty//g' "$f"
+            [ -f "$f" ] && sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+          echo "Current disk space:"
+          df -h
+
+          echo "Current kernel version: ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
+
+      - name: Setup KSUN (Full Feature - SUSFS + Nomount)
+        id: ksn_version
+        run: |
+          cd kernel_workspace/common
+          
+          echo "[+] Cloning KSUN (susfs+nomount-hookless)..."
+          git clone --depth=1 --branch=${{ env.KSN_BRANCH }} ${{ env.KSN_REPO }}.git KernelSU
+
+          echo "[+] Setting up KSUN symlink and driver configurations..."
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || \
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
+            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          echo "[+] Fixing uapi paths and include headers..."
+          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+          mkdir -p include/uapi
+          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+
+          echo "[+] Fixing ksu_flush_icache macro compilation error..."
+          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou((void *)(start), (void *)(end))/' KernelSU/kernel/hook/arm64/patch_memory.c || true
+
+          # Get KSUN version using the same logic as Makefile
+          cd KernelSU
+          if git rev-parse --git-dir > /dev/null 2>&1; then
+            # Check if shallow, unshallow if needed
+            if [ -f .git/shallow ]; then
+              git fetch --unshallow 2>/dev/null || true
+            fi
+            KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
+            KSU_GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")
+            KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+          else
+            KSU_VERSION=1
+            KSU_GIT_VERSION="unknown"
+            KSU_GIT_TAG="v0.0.1"
+          fi
+          cd ..
+
+          echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
+          echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
+          echo "ksu_tag=$KSU_GIT_TAG" >> $GITHUB_OUTPUT
+          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+          echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
+          echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
+
+          echo "================================"
+          echo "📊 KSUN Build Metadata"
+          echo "================================"
+          echo "🔧 KSUN Git Version: $KSU_GIT_VERSION"
+          echo "🔧 KSUN Kernel Version: $KSU_VERSION (30000 + $KSU_GIT_VERSION)"
+          echo "🏷️  KSUN Tag: $KSU_GIT_TAG"
+          echo "🔒 SUSFS: Enabled (CONFIG_KSU_KPROBES_SUSFS=y)"
+          echo "🔒 Nomount: Enabled (CONFIG_KSU_KPROBES_NOMOUNT=y)"
+          echo "================================"
+
+      - name: Add KSUN full configuration (SUSFS + Nomount)
+        run: |
+          cd kernel_workspace
+
+          DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
+
+          # Add KSUN with SUSFS and Nomount configs
+          cat >> "$DEFCONFIG" << 'EOF'
+          # KSUN Core
+          CONFIG_KSU=y
+          CONFIG_TMPFS_XATTR=y
+          CONFIG_TMPFS_POSIX_ACL=y
+          CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
+          CONFIG_HEADERS_INSTALL=n
+          # CONFIG_KSU_DEBUG is not set
+          
+          # KSUN Kprobes Hook
+          CONFIG_KSU_KPROBES_HOOK=y
+          # CONFIG_KSU_TAMPER_SYSCALL_TABLE is not set
+          CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
+          
+          # SUSFS (Super User File System)
+          CONFIG_KSU_KPROBES_SUSFS=y
+          CONFIG_SUSFS=y
+          CONFIG_SUSFS_DEVICE_MAPPING=y
+          CONFIG_SUSFS_FILES=y
+          CONFIG_SUSFS_PROCFS=y
+          CONFIG_SUSFS_SUS_PATH=y
+          CONFIG_SUSFS_TRY_SUDO=y
+          CONFIG_SUSFS_SUS_MOUNT=y
+          # CONFIG_SUSFS_DEBUG is not set
+          
+          # Nomount (Anti-mount namespace detection)
+          CONFIG_KSU_KPROBES_NOMOUNT=y
+          
+          # Networking features
+          CONFIG_NETFILTER_ADVANCED=y
+          CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+          CONFIG_NETFILTER_XT_TARGET_TPROXY=y
+          CONFIG_NETFILTER_XT_TARGET_REDIRECT=y
+          CONFIG_NETFILTER_XT_MATCH_SOCKET=y
+          CONFIG_NETFILTER_XT_MATCH_MARK=y
+          CONFIG_NETFILTER_XT_MATCH_IPRANGE=y
+          CONFIG_NETFILTER_XT_MATCH_OWNER=y
+          CONFIG_NETFILTER_XT_MATCH_MAC=y
+          CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+          CONFIG_NETFILTER_XT_MARK=y
+          CONFIG_NETFILTER_XT_CONNMARK=y
+          CONFIG_NETFILTER_XT_TARGET_CONNMARK=y
+          CONFIG_IP6_NF_NAT=y
+          CONFIG_IP6_NF_TARGET_REDIRECT=y
+          CONFIG_IP6_NF_TARGET_MASQUERADE=y
+          CONFIG_IP_MULTIPLE_TABLES=y
+          CONFIG_IPV6_MULTIPLE_TABLES=y
+          CONFIG_XFRM_ALGO=y
+          CONFIG_INET_IPCOMP=y
+          CONFIG_INET_XFRM_TUNNEL=y
+          CONFIG_INET_ESP=y
+          CONFIG_XFRM_USER=y
+          CONFIG_XFRM_SUB_POLICY=y
+          CONFIG_INET_XFRM_MODE_TUNNEL=y
+          CONFIG_XFRM_STATISTICS=y
+          CONFIG_IP_SET=y
+          CONFIG_NETFILTER_XT_SET=y
+          CONFIG_IP_SET_MAX=65534
+          CONFIG_IP_SET_BITMAP_IP=y
+          CONFIG_IP_SET_BITMAP_IPMAC=y
+          CONFIG_IP_SET_BITMAP_PORT=y
+          CONFIG_IP_SET_HASH_IP=y
+          CONFIG_IP_SET_HASH_IPMARK=y
+          CONFIG_IP_SET_HASH_IPPORT=y
+          CONFIG_IP_SET_HASH_IPPORTIP=y
+          CONFIG_IP_SET_HASH_IPPORTNET=y
+          CONFIG_IP_SET_HASH_IPMAC=y
+          CONFIG_IP_SET_HASH_MAC=y
+          CONFIG_IP_SET_HASH_NETPORTNET=y
+          CONFIG_IP_SET_HASH_NET=y
+          CONFIG_IP_SET_HASH_NETNET=y
+          CONFIG_IP_SET_HASH_NETPORT=y
+          CONFIG_IP_SET_HASH_NETIFACE=y
+          CONFIG_IP_SET_LIST_SET=y
+          CONFIG_TCP_CONG_ADVANCED=y
+          CONFIG_TCP_CONG_BBR=y
+          CONFIG_NET_SCH_FQ=y
+          CONFIG_DEFAULT_BBR=y
+          CONFIG_SECURITY_NETWORK=y
+          CONFIG_CGROUPS=y
+          CONFIG_CGROUP_BPF=y
+          CONFIG_CGROUP_SCHED=y
+          CONFIG_CGROUP_PIDS=y
+          CONFIG_CGROUP_FREEZER=y
+          CONFIG_INOTIFY_USER=y
+          EOF
+
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+
+          echo "✅ KSUN full configuration applied (SUSFS + Nomount)"
+
+      - name: Add kernel version suffix
+        run: |
+          cd kernel_workspace
+
+          echo "Replacing kernel version suffix..."
+
+          SUFFIX="${{ env.KERNEL_NAME }}"
+
+          echo "Current kernel version suffix: $SUFFIX"
+
+          for f in ./common/scripts/setlocalversion; do
+            [ -f "$f" ] && sed -i "\$s|echo \"\\\$res\"|echo \"-${SUFFIX}\"|" "$f"
+          done
+
+      - name: Build kernel
+        run: |
+          WORKDIR="$(pwd)"
+
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
+
+          CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
+
+          echo "Compiler information:"
+          echo "Clang version: $($CLANG_DIR/clang --version | head -n 1)"
+          echo "LLD version: $($CLANG_DIR/ld.lld --version | head -n 1)"
+
+          pahole_version=$(pahole --version 2>/dev/null | head -n1 || true)
+          [ -z "$pahole_version" ] && echo "pahole version: not installed" || echo "pahole version: $pahole_version"
+
+          cd kernel_workspace/common
+
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL &
+
+          export KBUILD_BUILD_USER="${{ env.KBUILD_BUILD_USER }}"
+          export KBUILD_BUILD_HOST="${{ env.KBUILD_BUILD_HOST }}"
+          export KBUILD_BUILD_TIMESTAMP="${{ env.BUILD_TIMESTAMP }}"
+
+          # Set KSUN version for build
+          export KSU_VERSION="${{ env.KSU_VERSION }}"
+
+          make -j$(nproc --all) \
+            LLVM=1 \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CC="clang" \
+            LD="ld.lld" \
+            HOSTLD=ld.lld \
+            O=out \
+            KCFLAGS="-O2 -w" \
+            gki_defconfig
+
+          make -j$(nproc --all) \
+            LLVM=1 \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CC="clang" \
+            LD="ld.lld" \
+            HOSTLD=ld.lld \
+            O=out \
+            KCFLAGS="-O2 -w" \
+            Image
+
+          echo "Kernel build completed."
+
+          df -h
+
+      - name: Clone AnyKernel3 and package kernel
+        run: |
+          cd kernel_workspace
+
+          git clone https://github.com/cctv18/AnyKernel3 --depth=1
+
+          rm -rf ./AnyKernel3/.git
+
+          cd AnyKernel3
+
+          cp ../common/out/arch/arm64/boot/Image ./Image
+
+          if [[ ! -f ./Image ]]; then
+            echo "Kernel image not found. The build may have failed."
+            exit 1
+          fi
+
+          KSU_VER="${{ env.KSU_GIT_VERSION }}"
+          [ -z "$KSU_VER" ] && KSU_VER="${{ steps.ksn_version.outputs.ksu_git_version }}"
+          [ -z "$KSU_VER" ] && KSU_VER="unknown"
+
+          KSU_VERSION="${{ env.KSU_VERSION }}"
+          [ -z "$KSU_VERSION" ] && KSU_VERSION="${{ steps.ksn_version.outputs.ksu_version }}"
+          [ -z "$KSU_VERSION" ] && KSU_VERSION="1"
+
+          KSU_TAG="${{ env.KSU_GIT_TAG }}"
+          [ -z "$KSU_TAG" ] && KSU_TAG="${{ steps.ksn_version.outputs.ksu_tag }}"
+          [ -z "$KSU_TAG" ] && KSU_TAG="v0.0.1"
+
+          ZIP_NAME="AK3_KSUN-SUSFS_r${KSU_VERSION}_${KSU_TAG}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip"
+
+          zip -r9 "../${ZIP_NAME}" ./*
+
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+          echo "ZIP_PATH=$PWD/../${ZIP_NAME}" >> $GITHUB_ENV
+
+          echo "Packaging completed: ${ZIP_NAME}"
+          echo "KSUN Version: r${KSU_VERSION} (${KSU_TAG})"
+
+      - name: Upload AnyKernel3 flashable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AK3_${{ env.KERNEL_VERSION }}_KSUN-SUSFS
+          path: kernel_workspace/AK3_*.zip
+
+      - name: Verify KSUN features
+        if: always()
+        run: |
+          cd kernel_workspace
+          
+          if [ -f "./common/out/arch/arm64/boot/Image" ]; then
+            echo "✅ Kernel built successfully"
+            IMAGE="./common/out/arch/arm64/boot/Image"
+            
+            # Check for KSUN
+            if strings "$IMAGE" | grep -q "KernelSU"; then
+              echo "✅ KSUN core verified"
+            else
+              echo "⚠️ KSUN symbols not found"
+            fi
+            
+            # Check for SUSFS
+            if strings "$IMAGE" | grep -q "susfs"; then
+              echo "✅ SUSFS verified"
+            else
+              echo "⚠️ SUSFS symbols not found"
+            fi
+            
+            # Check for Nomount
+            if strings "$IMAGE" | grep -q "nomount"; then
+              echo "✅ Nomount verified"
+            else
+              echo "⚠️ Nomount symbols not found"
+            fi
+            
+            # Check KSUN version
+            KSU_VER=$(strings "$IMAGE" | grep -E "KSU_VERSION_[0-9]+" | head -1 || echo "not found")
+            echo "KSUN version marker: $KSU_VER"
+          else
+            echo "❌ Kernel image not found!"
+            exit 1
+          fi
