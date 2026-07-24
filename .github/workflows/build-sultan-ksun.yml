@@ -45,22 +45,37 @@ jobs:
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
 
-      - name: KSUN & Patches
+      - name: Setup KSUN (Reference Integration Method)
         working-directory: sultan
         run: |
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSN_REPO }}/${{ env.KSN_BRANCH }}/kernel/setup.sh" | bash -s -- "${{ env.KSN_BRANCH }}"
-          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
-          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
-          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          echo "[+] Cloning KSUN repository..."
+          git clone --depth=50 --branch "${{ env.KSN_BRANCH }}" "https://github.com/${{ env.KSN_REPO }}.git" KernelSU
+          
+          echo "[+] Setting up symlink and driver configurations..."
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "kernelsu" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          echo "[+] Fixing uapi paths and include headers..."
+          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+          mkdir -p include/uapi
+          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+
+          echo "[+] Applying Sultan-specific patches..."
+          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch || true
+          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch || true
+          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || true
 
       - name: Extract KSU Version Info
         id: ksu-version
         shell: bash
-        working-directory: sultan/drivers/kernelsu
+        working-directory: sultan/KernelSU
         run: |
-          # 补全 setup.sh 拉取后的 git 历史深度以供版本统计
-          git fetch --depth=50 origin "${{ env.KSN_BRANCH }}" 2>/dev/null || true
-          
           # 提取并导出 KSU 版本信息
           KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null || echo "0")
           KSU_GIT_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
