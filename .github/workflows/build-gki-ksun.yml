@@ -24,7 +24,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Install dependencies and initialize source repository with LLVM-Clang20 toolchain
+      - name: Install dependencies and initialize source repository
         run: |
           rm -rf kernel_workspace
           mkdir kernel_workspace
@@ -90,47 +90,17 @@ jobs:
 
           echo "Current kernel version: ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
 
-      - name: Setup KSUN (SUSFS + Nomount built-in)
-        id: ksn_version
+      - name: Clone KSUN repository
         run: |
           cd kernel_workspace/common
-          
-          echo "[+] Cloning KSUN (susfs+nomount-hookless)..."
+          echo "Cloning KSUN (susfs+nomount-hookless)..."
           git clone --depth=1 --branch=${{ env.KSN_BRANCH }} ${{ env.KSN_REPO }}.git KernelSU
 
-          echo "[+] Setting up KSUN symlink and driver configurations..."
-          ln -sf ../KernelSU/kernel drivers/kernelsu
-
-          grep -q "kernelsu" drivers/Makefile || \
-            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
-
-          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
-            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
-
-          echo "[+] Fixing uapi paths and include headers..."
-          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
-          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
-          mkdir -p include/uapi
-          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
-          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
-          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
-
-          echo "[+] Fixing ksu_flush_icache macro compilation error..."
-          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou((void *)(start), (void *)(end))/' KernelSU/kernel/hook/arm64/patch_memory.c || true
-
-          echo "[+] Fixing SUSFS kstat.c for GKI 6.1 compatibility..."
-          KSTAT_FILE="KernelSU/kernel/susfs/kstat.c"
-          if [ -f "$KSTAT_FILE" ] && grep -q "tail_vma" "$KSTAT_FILE"; then
-            # GKI 6.1 doesn't have tail_vma in proc_maps_private
-            # Disable the problematic code paths
-            sed -i 's/if (vma == priv->tail_vma)/if (0) \/* GKI 6.1: tail_vma not available *\//g' "$KSTAT_FILE"
-            sed -i 's/return priv->tail_vma;/return NULL; \/* GKI 6.1: tail_vma not available *\//g' "$KSTAT_FILE"
-            echo "✅ Applied tail_vma compatibility fix"
-          fi
-
-          # Get KSUN version
-          cd KernelSU
+      - name: Calculate KSUN version
+        id: ksn_version
+        run: |
+          cd kernel_workspace/common/KernelSU
+          
           if git rev-parse --git-dir > /dev/null 2>&1; then
             if [ -f .git/shallow ]; then
               git fetch --unshallow 2>/dev/null || true
@@ -143,8 +113,7 @@ jobs:
             KSU_GIT_VERSION="unknown"
             KSU_GIT_TAG="v0.0.1"
           fi
-          cd ..
-
+          
           echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
           echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
           echo "ksu_tag=$KSU_GIT_TAG" >> $GITHUB_OUTPUT
@@ -152,23 +121,55 @@ jobs:
           echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
           echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
 
-          echo "================================"
-          echo "📊 KSUN Build Metadata"
-          echo "================================"
-          echo "🔧 KSUN Git Version: $KSU_GIT_VERSION"
-          echo "🔧 KSUN Kernel Version: $KSU_VERSION (30000 + $KSU_GIT_VERSION)"
-          echo "🏷️  KSUN Tag: $KSU_GIT_TAG"
-          echo "🔒 SUSFS: Built-in (CONFIG_KSU_KPROBES_SUSFS=y)"
-          echo "🔒 Nomount: Built-in (CONFIG_KSU_KPROBES_NOMOUNT=y)"
-          echo "================================"
+          echo "========================================"
+          echo "KSUN Build Metadata"
+          echo "========================================"
+          echo "KSUN Git Version: $KSU_GIT_VERSION"
+          echo "KSUN Kernel Version: $KSU_VERSION (30000 + $KSU_GIT_VERSION)"
+          echo "KSUN Tag: $KSU_GIT_TAG"
+          echo "SUSFS: Built-in (CONFIG_KSU_KPROBES_SUSFS=y)"
+          echo "Nomount: Built-in (CONFIG_KSU_KPROBES_NOMOUNT=y)"
+          echo "========================================"
 
-      - name: Add KSUN configuration
+      - name: Apply KSUN patches and fixes
+        run: |
+          cd kernel_workspace/common
+          
+          echo "Setting up KSUN symlink and driver configurations..."
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || \
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
+            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          echo "Fixing uapi paths and include headers..."
+          cp -r KernelSU/uapi KernelSU/kernel/uapi 2>/dev/null || true
+          echo 'ccflags-y += -I$(srctree)/drivers/kernelsu' >> drivers/kernelsu/Makefile
+          mkdir -p include/uapi
+          cp -f KernelSU/kernel/policy/*.h include/uapi/ 2>/dev/null || true
+          cp -f KernelSU/kernel/policy/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
+          cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
+
+          echo "Fixing ksu_flush_icache macro compilation error..."
+          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou((void *)(start), (void *)(end))/' KernelSU/kernel/hook/arm64/patch_memory.c || true
+
+          echo "Fixing SUSFS kstat.c for GKI 6.1 compatibility..."
+          KSTAT_FILE="KernelSU/kernel/susfs/kstat.c"
+          if [ -f "$KSTAT_FILE" ] && grep -q "tail_vma" "$KSTAT_FILE"; then
+            sed -i 's/if (vma == priv->tail_vma)/if (0) \/* GKI 6.1: tail_vma not available *\//g' "$KSTAT_FILE"
+            sed -i 's/return priv->tail_vma;/return NULL; \/* GKI 6.1: tail_vma not available *\//g' "$KSTAT_FILE"
+            echo "Applied tail_vma compatibility fix"
+          fi
+
+      - name: Add KSUN kernel configuration
         run: |
           cd kernel_workspace
 
           DEFCONFIG="./common/arch/arm64/configs/gki_defconfig"
 
-          # Add KSUN configs - SUSFS and Nomount are built-in
           cat >> "$DEFCONFIG" << 'EOF'
           CONFIG_KSU=y
           CONFIG_TMPFS_XATTR=y
@@ -181,7 +182,6 @@ jobs:
           CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
           CONFIG_KSU_KPROBES_SUSFS=y
           CONFIG_KSU_KPROBES_NOMOUNT=y
-          
           
           CONFIG_NETFILTER_ADVANCED=y
           CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
@@ -197,7 +197,7 @@ jobs:
 
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
-          echo "✅ KSUN configuration applied (SUSFS + Nomount built-in)"
+          echo "KSUN configuration applied (SUSFS + Nomount built-in)"
 
       - name: Add kernel version suffix
         run: |
