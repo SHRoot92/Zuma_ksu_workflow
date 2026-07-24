@@ -20,7 +20,8 @@ jobs:
     name: Build gs201 Kernel
     runs-on: ubuntu-latest
     outputs:
-      ksu_ver: ${{ steps.ksu-version.outputs.ksu_ver }}
+      ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
+      ksu_version: ${{ steps.meta.outputs.ksu_version }}
       s_tag: ${{ steps.meta.outputs.s_tag }}
       gcc_version: ${{ steps.meta.outputs.gcc_version }}
       
@@ -44,7 +45,6 @@ jobs:
           git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
           git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
-
 
       - name: Setup KSUN (Reference Integration Method)
         working-directory: sultan
@@ -75,28 +75,41 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch || true
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || true
 
+      # ========== 关键修改：Metadata 步骤（直接实现 Makefile 逻辑） ==========
       - name: Metadata
         id: meta
         run: |
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
-          K_VER=$(./sh/get_ksuver.sh "MirahSyakilla" "KSUN"  || echo "unknown")
           
-          # Get GCC version - extract just the version number
+          # 直接使用 Makefile 的版本计算方法
+          cd sultan/KernelSU
+          if git rev-parse --git-dir > /dev/null 2>&1; then
+            K_VER=$(git rev-list --count HEAD)
+            KSU_VERSION=$((30000 + K_VER))
+          else
+            KSU_VERSION=1
+          fi
+          cd ../..
+          
           GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
           GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
+          echo "ksu_version=$KSU_VERSION" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
           
-          # Display all metadata
+          echo "KSU_VERSION=$KSU_VERSION" >> "$GITHUB_ENV"
+          
           echo "================================"
           echo "📊 Build Metadata"
           echo "================================"
           echo "🏷️  Sultan Tag: $S_TAG"
-          echo "🔧 xxKSU Version: r$K_VER"
+          echo "🔧 Raw KSUN version: $K_VER"
+          echo "🔧 KSUN version (kernel): r$KSU_VERSION"
           echo "⚙️  GCC Version: $GCC_VER"
           echo "================================"
+      # ===================================================================
 
       - name: Global Defconfig Analysis
         working-directory: sultan
@@ -120,7 +133,6 @@ jobs:
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
     
-          # Append configuration without comments
           cat >> out/.config << 'EOF'
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
@@ -196,7 +208,6 @@ jobs:
           CONFIG_INOTIFY_USER=y
           EOF
     
-          # Run olddefconfig and suppress warnings
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
 
       - name: Build Kernel (Production)
@@ -216,7 +227,6 @@ jobs:
           
           ZIP_NAME="Sultan-gs201-$(date +'%Y%m%d')-KSUN-r${{ env.KSU_VERSION }}.zip"
           
-          # Main flashable AnyKernel3 zip
           ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
           
           echo "ZIP_PATH=$PWD/$ZIP_NAME" >> "$GITHUB_ENV"
@@ -256,6 +266,7 @@ jobs:
           S_TAG: ${{ needs.build.outputs.s_tag }}
           GCC_VER: ${{ needs.build.outputs.gcc_version }}
           KSU_VER: ${{ needs.build.outputs.ksu_ver }}
+          KSU_VERSION: ${{ needs.build.outputs.ksu_version }}
         run: |
           DATE=$(date +"%Y.%m.%d")
           MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
@@ -267,7 +278,6 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
           
-          # Find the zip file
           ZIP_FILE=$(find ./artifacts -name "*.zip" -type f | head -1)
           
           if [ -z "$ZIP_FILE" ]; then
@@ -285,7 +295,7 @@ jobs:
             | :--- | :--- |
             | **Kernel Base** | Sultan ($S_TAG) |
             | **Manager** | [yapixel/KSUN](https://github.com/yapixel/KSUN) |
-            | **KSUN Ver** | \`r$KSU_VER\` |
+            | **KSUN Ver** | \`r$KSU_VERSION\` (raw: $KSU_VER) |
             | **Compiler** | GCC $GCC_VER |
             
             ### 🛠️ Networking Features (Fortress)
