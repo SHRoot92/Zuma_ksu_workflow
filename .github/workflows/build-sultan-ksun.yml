@@ -49,20 +49,14 @@ jobs:
         id: ksu-version
         run: |
           chmod +x sh/extract_ksuver.sh
-          OWNER="${{ github.event.repository.owner.login }}" # 或者直接通过 cut 分割
-          # 重新稳妥地切割 owner 和 repo
-          RAW_REPO="${{ env.KSN_REPO }}"
-          OWNER=$(echo "$RAW_REPO" | cut -d'/' -f1)
-          REPO=$(echo "$RAW_REPO" | cut -d'/' -f2)
           
-          echo "Target owner: $OWNER, repo: $REPO, branch: ${{ env.KSN_BRANCH }}"
-          
-          EXACT_VER=$(./sh/extract_ksuver.sh "$OWNER" "$REPO" "${{ env.KSN_BRANCH }}")
+          # 正确按照脚本源码参数调用：<repo_url> <makefile_path> <src_dir> [branch]
+          EXACT_VER=$(./sh/extract_ksuver.sh "https://github.com/${{ env.KSN_REPO }}.git" "kernel/Makefile" "kernel" "${{ env.KSN_BRANCH }}")
           echo "Extracted KSUN Version: $EXACT_VER"
           
           echo "ksu_ver=$EXACT_VER" >> "$GITHUB_OUTPUT"
           echo "KSU_VERSION=$EXACT_VER" >> "$GITHUB_ENV"
-          
+
       - name: Setup KSUN (Reference Integration Method)
         working-directory: sultan
         run: |
