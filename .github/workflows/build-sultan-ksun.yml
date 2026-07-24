@@ -56,12 +56,12 @@ jobs:
       - name: Extract KSU Version Info
         id: ksu-version
         shell: bash
-        working-directory: sultan/kernel/kernelsu
+        working-directory: sultan/drivers/kernelsu
         run: |
-          # Fetch branch for version info (tags, commits, etc.)
+          # 补全 setup.sh 拉取后的 git 历史深度以供版本统计
           git fetch --depth=50 origin "${{ env.KSN_BRANCH }}" 2>/dev/null || true
           
-          # Extract and export KSU version info from target branch
+          # 提取并导出 KSU 版本信息
           KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null || echo "0")
           KSU_GIT_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
           KSU_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
