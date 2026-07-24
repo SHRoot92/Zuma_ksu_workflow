@@ -49,7 +49,7 @@ jobs:
         working-directory: sultan
         run: |
           echo "[+] Cloning KSUN repository..."
-          git clone --depth=50 --branch "${{ env.KSN_BRANCH }}" "https://github.com/${{ env.KSN_REPO }}.git" KernelSU
+          git clone  --branch "${{ env.KSN_BRANCH }}" "https://github.com/${{ env.KSN_REPO }}.git" KernelSU
           
           echo "[+] Setting up symlink and driver configurations..."
           ln -sf ../KernelSU/kernel drivers/kernelsu
