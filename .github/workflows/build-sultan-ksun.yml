@@ -67,8 +67,6 @@ jobs:
           cp -f KernelSU/kernel/include/*.h include/ 2>/dev/null || true
           cp -f KernelSU/kernel/uapi/*.h include/uapi/ 2>/dev/null || true
 
-          echo "[+] Fixing ksu_flush_icache macro compilation error..."
-          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou((void *)(start), (void *)(end))/' KernelSU/kernel/hook/arm64/patch_memory.c
 
           echo "[+] Applying Sultan-specific patches..."
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch || true
