@@ -165,42 +165,33 @@ jobs:
          cd kernel_workspace/common/KernelSU
     
          LATEST_TAG=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags | \
-          jq -r '.[0].name // "v0.0.1"')
+         https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags | \
+         jq -r '.[0].name // "v0.0.1"')
     
          if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
          LATEST_TAG=$(curl -s -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | \
-          jq -r '.tag_name // "v0.0.1"')
+         https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | \
+         jq -r '.tag_name // "v0.0.1"')
          fi
     
          if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
-          LATEST_TAG="v0.0.1"
+         LATEST_TAG="v0.0.1"
          fi
     
          echo "Latest tag from KernelSU-Next: $LATEST_TAG"
     
-         if [ -d .git ]; then
-          if [ -f .git/shallow ]; then
-          git fetch --unshallow 2>/dev/null || true
-          fi
-          KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
-      
-          git tag -f "$LATEST_TAG" 2>/dev/null || true
-          fi
+         git tag -f "$LATEST_TAG"
     
-          if [ -z "$KSU_GIT_VERSION" ]; then
-           KSU_GIT_VERSION=0
-          fi
+         KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
+         KSU_VERSION=$((30000 + KSU_GIT_VERSION))
     
-          KSU_VERSION=$((30000 + KSU_GIT_VERSION))
-    
-          echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
-          echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
-          echo "ksu_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
-          echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
-          echo "KSU_GIT_TAG=$LATEST_TAG" >> $GITHUB_ENV
+         echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
+         echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
+         echo "ksu_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+         echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+         echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
+         echo "KSU_GIT_TAG=$LATEST_TAG" >> $GITHUB_ENV
+
 
       - name: Apply KSUN patches and fixes
         run: |
@@ -272,25 +263,29 @@ jobs:
 
       - name: Show build metadata
         run: |
-          echo "========================================"
-          echo "Build Metadata"
-          echo "========================================"
-          echo "Kernel Version: ${{ env.KERNEL_VERSION_FULL }}"
-          echo "Kernel Suffix:  ${{ env.KERNEL_NAME }}"
-          echo ""
-          echo "KSUN Version:   ${{ env.KSU_VERSION }}"
-          echo "KSUN Git:       ${{ env.KSU_GIT_VERSION }}"
-          echo "KSUN Tag:       ${{ env.KSU_GIT_TAG }}"
-          echo ""
-          echo "Clang:"
-          $CLANG_BIN/clang --version | head -1
-          echo "GCC64:"
-          ${GCC_PATH}gcc --version | head -1
-          echo ""
-          echo "User:           ${{ env.KBUILD_BUILD_USER }}"
-          echo "Host:           ${{ env.KBUILD_BUILD_HOST }}"
-          echo "Cores:          $(nproc)"
-          echo "========================================"
+         cd kernel_workspace/common/KernelSU
+    
+         KSU_VERSION_FROM_MAKEFILE=$(grep "KSU_VERSION =" kernel/Makefile 2>/dev/null | awk '{print $3}' | head -1 || echo "unknown")
+    
+         echo "========================================"
+         echo "Build Metadata"
+         echo "========================================"
+         echo "Kernel Version: ${{ env.KERNEL_VERSION_FULL }}"
+         echo "Kernel Suffix:  ${{ env.KERNEL_NAME }}"
+         echo ""
+         echo "KSUN Version:   ${KSU_VERSION_FROM_MAKEFILE}"
+         echo "KSUN Git:       ${{ env.KSU_GIT_VERSION }}"
+         echo "KSUN Tag:       ${{ env.KSU_GIT_TAG }}"
+         echo ""
+         echo "Clang:"
+         $CLANG_BIN/clang --version | head -1
+         echo "GCC64:"
+         ${GCC_PATH}gcc --version | head -1
+         echo ""
+         echo "User:           ${{ env.KBUILD_BUILD_USER }}"
+         echo "Host:           ${{ env.KBUILD_BUILD_HOST }}"
+         echo "Cores:          $(nproc)"
+         echo "========================================"
 
       - name: Build kernel
         run: |
