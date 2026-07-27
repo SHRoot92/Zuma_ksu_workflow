@@ -71,6 +71,9 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          patch -p1 < ../kernel_patches/sultan/0001-modify-do_faccessat-to-noinline.patch
+          
+          
           
       - name: Apply Patches KSU + SuSFS (10+50 Logic)
         working-directory: sultan
