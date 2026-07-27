@@ -155,34 +155,50 @@ jobs:
 
       - name: Clone KSUN repository
         run: |
-          cd kernel_workspace/common
-          echo "Cloning KSUN (susfs+nomount-hookless)..."
-          git clone --depth=1 --branch=${{ env.KSN_BRANCH }} ${{ env.KSN_REPO }}.git KernelSU
-
+         cd kernel_workspace/common
+         echo "Cloning KSUN (susfs+nomount-hookless)..."
+         git clone --depth=1 --branch=${{ env.KSN_BRANCH }} ${{ env.KSN_REPO }}.git KernelSU
+         
       - name: Calculate KSUN version
         id: ksn_version
         run: |
-          cd kernel_workspace/common/KernelSU
-          
-          if git rev-parse --git-dir > /dev/null 2>&1; then
-            if [ -f .git/shallow ]; then
-              git fetch --unshallow 2>/dev/null || true
-            fi
-            KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
-            KSU_GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")
-            KSU_VERSION=$((30000 + KSU_GIT_VERSION))
-          else
-            KSU_VERSION=1
-            KSU_GIT_VERSION="unknown"
-            KSU_GIT_TAG="v0.0.1"
+         cd kernel_workspace/common/KernelSU
+    
+         LATEST_TAG=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+         https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags | \
+         jq -r '.[0].name // "v0.0.1"')
+    
+         if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
+         LATEST_TAG=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+         https://api.github.com/repos/KernelSU-Next/KernelSU-Next/releases/latest | \
+         jq -r '.tag_name // "v0.0.1"')
+         fi
+    
+          if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.1"
           fi
-          
-          echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
-          echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
-          echo "ksu_tag=$KSU_GIT_TAG" >> $GITHUB_OUTPUT
-          echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
-          echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
-          echo "KSU_GIT_TAG=$KSU_GIT_TAG" >> $GITHUB_ENV
+    
+         echo "Latest tag from KernelSU-Next: $LATEST_TAG"
+    
+         if [ -d .git ]; then
+         if [ -f .git/shallow ]; then
+          git fetch --unshallow 2>/dev/null || true
+         fi
+         KSU_GIT_VERSION=$(git rev-list --count HEAD 2>/dev/null)
+         fi
+    
+         if [ -z "$KSU_GIT_VERSION" ]; then
+          KSU_GIT_VERSION=0
+         fi
+    
+         KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+    
+         echo "ksu_git_version=$KSU_GIT_VERSION" >> $GITHUB_OUTPUT
+         echo "ksu_version=$KSU_VERSION" >> $GITHUB_OUTPUT
+         echo "ksu_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+         echo "KSU_VERSION=$KSU_VERSION" >> $GITHUB_ENV
+         echo "KSU_GIT_VERSION=$KSU_GIT_VERSION" >> $GITHUB_ENV
+         echo "KSU_GIT_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
       - name: Apply KSUN patches and fixes
         run: |
