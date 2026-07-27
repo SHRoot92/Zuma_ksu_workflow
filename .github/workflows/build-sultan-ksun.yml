@@ -74,10 +74,10 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || true
 
       - name: Fix KernelSU icache flush macro
+        working-directory: sultan
         run: |
-          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou(start, end)/' KernelSU/kernel/hook/arm64/patch_memory.c
-
-      # ========== 关键修改：Metadata 步骤（直接实现 Makefile 逻辑） ==========
+         sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou(start, end)/' KernelSU/drivers/kernelsu/hook/arm64/patch_memory.c
+      
       - name: Metadata
         id: meta
         run: |
