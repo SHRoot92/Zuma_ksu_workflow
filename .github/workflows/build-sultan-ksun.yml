@@ -73,6 +73,10 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch || true
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch || true
 
+      - name: Fix KernelSU icache flush macro
+        run: |
+          sed -i 's/#define ksu_flush_icache(start, end) caches_clean_inval_pou/#define ksu_flush_icache(start, end) caches_clean_inval_pou(start, end)/' drivers/kernelsu/hook/arm64/patch_memory.c
+
       # ========== 关键修改：Metadata 步骤（直接实现 Makefile 逻辑） ==========
       - name: Metadata
         id: meta
