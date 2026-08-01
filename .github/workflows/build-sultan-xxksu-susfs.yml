@@ -100,6 +100,7 @@ jobs:
     
           # Append configuration without comments
           cat >> out/.config << 'EOF'
+          COMFIG_AUDIT=y
           CONFIG_TMPFS_XATTR=y
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_LOG_BUF_SHIFT=21
