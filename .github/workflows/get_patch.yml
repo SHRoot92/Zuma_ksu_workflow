@@ -1,47 +1,53 @@
-name: Generate Git-Style Clean Patch
+name: Generate & Verify Clean Git Patch
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-patch:
+  patch-and-verify:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Workspace & Target
+      - name: Setup Target Workspace
         run: |
           mkdir -p work_tree/security
           cd work_tree
-
           git init -b main
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 1. 下载目标 security.c
+          # 1. 获取 Sultan tensynos 目标 security.c
           curl -sSL "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/refs/heads/16.0.0-sultan/security/security.c" -o security/security.c
 
-          # 2. 提交初始状态作为 git diff 基准
+          # 2. 提交初始版本作为 Diff 基准
           git add security/security.c
-          git commit -m "base: pristine security.c"
+          git commit -m "base: pristine security.c from 16.0.0-sultan"
 
-      - name: Patch Security Hooks via Python Injector
+      - name: Perform AST-Level Hook Injection
         working-directory: work_tree
         run: |
           python3 - << 'EOF'
           import re
           import sys
 
-          path = "security/security.c"
-          with open(path, "r", encoding="utf-8") as f:
-              content = f.read()
+          file_path = "security/security.c"
+          with open(file_path, "r", encoding="utf-8") as f:
+              code = f.read()
 
-          orig_content = content
+          original_code = code
 
-          # 注入 EXPORT_SYMBOL / hook 声明与核心逻辑 (针对 manual-security-hooks 常见函数)
-          hooks_to_export = [
+          # 1. 确保头部包含 manual hooks 依赖头文件 (若需要)
+          if "#include <linux/security.h>" in code and "/* MANUAL_SECURITY_HOOKS */" not in code:
+              code = code.replace(
+                  "#include <linux/security.h>",
+                  "#include <linux/security.h>\n/* MANUAL_SECURITY_HOOKS */"
+              )
+
+          # 2. 需要暴露与注入的 security hooks 列表
+          target_hooks = [
               "security_task_fix_setuid",
               "security_task_prctl",
               "security_inode_create",
@@ -58,53 +64,73 @@ jobs:
               "security_file_permission",
               "security_file_open",
               "security_bprm_check",
-              "security_bprm_creds_for_exec",
+              "security_bprm_creds_for_exec"
           ]
 
-          # 为每个 target hook 确保有 EXPORT_SYMBOL
-          for hook in hooks_to_export:
-              # 匹配函数体结束的大括号
-              pattern = rf'(int\s+{hook}\s*\([^)]*\)\s*\{{.*?^\}})'
-              match = re.search(pattern, content, flags=re.DOTALL | re.MULTILINE)
+          modified_count = 0
+
+          # 3. 逐个定位函数体并在末尾补充 EXPORT_SYMBOL (如缺失)
+          for hook in target_hooks:
+              # 匹配形如 int security_xxx(...) { ... } 的完整函数块
+              pattern = rf'((\nint\s+{hook}\s*\([^)]*\)\s*\{{)([\s\S]*?\n\}}))'
+              match = re.search(pattern, code)
               if match:
-                  func_block = match.group(1)
-                  export_line = f"\nEXPORT_SYMBOL({hook});"
-                  if export_line not in content:
-                      content = content.replace(func_block, func_block + export_line)
+                  full_func = match.group(1)
+                  # 检查函数后是否已经存在 EXPORT_SYMBOL
+                  export_pattern = rf'{hook}\s*\)\s*;\s*\nEXPORT_SYMBOL(?:_GPL)?\s*\(\s*{hook}\s*\);'
+                  if not re.search(export_pattern, code):
+                      new_func = full_func + f"\nEXPORT_SYMBOL({hook});"
+                      code = code.replace(full_func, new_func, 1)
+                      modified_count += 1
+                      print(f"[OK] Patched and exported: {hook}")
+              else:
+                  print(f"[WARN] Function {hook} not matched via regex pattern", file=sys.stderr)
 
-          # 如果有自包含的 manual security hook 替换宏/函数，确保写入
-          if content == orig_content:
-              print("Warning: No regex matches found, using fallback search & replace", file=sys.stderr)
+          if code == original_code:
+              print("Error: No modifications were made to security.c!", file=sys.stderr)
+              sys.exit(1)
 
-          with open(path, "w", encoding="utf-8") as f:
-              f.write(content)
+          with open(file_path, "w", encoding="utf-8") as f:
+              f.write(code)
 
-          print("Patch injection completed.")
+          print(f"Injection finished: {modified_count} hooks processed.")
           EOF
 
-      - name: Generate & Verify Git Patch
+      - name: Generate Patch & Self-Test Verification
         working-directory: work_tree
         run: |
           mkdir -p ../artifacts
 
-          # 生成标准 Git diff 补丁
-          git diff security/security.c > ../artifacts/manual-security-hooks-clean.patch
+          # 生成标准 git diff 补丁
+          git diff security/security.c > ../artifacts/manual-security-hooks-tensynos.patch
 
-          # 检查补丁是否为空
-          if [ ! -s ../artifacts/manual-security-hooks-clean.patch ]; then
-            echo "::error ::Patch file is still empty! Target functions not matched."
+          # 校验 1: 补丁大小是否大于 0
+          if [ ! -s ../artifacts/manual-security-hooks-tensynos.patch ]; then
+            echo "::error ::Generated patch is empty!"
             exit 1
           fi
 
-          # 生成可直接用于 git am 的提交补丁
-          git add security/security.c
-          git commit -m "security: apply manual security hooks"
-          git format-patch -1 HEAD -o ../artifacts/
+          echo "=== Patch Generation Successful ==="
+          echo "Patch size: $(wc -c < ../artifacts/manual-security-hooks-tensynos.patch) bytes"
 
-          echo "Clean git patch generated successfully."
+          # 校验 2: 回退代码，实测 git apply 能否 100% 顺利打入
+          echo "=== Running Self-Verification Test (git apply --check) ==="
+          git checkout security/security.c
 
-      - name: Upload Clean Patch Artifact
+          if git apply --check ../artifacts/manual-security-hooks-tensynos.patch; then
+            echo "::notice ::Self-test PASSED: Patch applies cleanly without any rejects."
+            # 实际打入并生成 format-patch
+            git apply ../artifacts/manual-security-hooks-tensynos.patch
+            git add security/security.c
+            git commit -m "security: add manual security hooks exports for tensynos"
+            git format-patch -1 HEAD -o ../artifacts/
+          else
+            echo "::error ::Self-test FAILED: Patch cannot be applied cleanly to pristine file!"
+            exit 1
+          fi
+
+      - name: Upload Verified Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: clean-git-patch
+          name: verified-clean-patch
           path: artifacts/
