@@ -1,0 +1,103 @@
+--- security/security.c.orig	2026-08-22 07:37:09.443777088 +0000
++++ security/security.c	2026-08-22 07:37:09.448124556 +0000
+@@ -748,6 +748,15 @@
+ 	RC;							\
+ })
+ 
++#ifdef CONFIG_KSU
++extern int ksu_bprm_check(struct linux_binprm *bprm);
++extern int ksu_inode_rename(struct inode *old_dir, struct dentry *old_dentry, 
++				struct inode *new_dir, struct dentry *new_dentry);
++extern int ksu_task_fix_setuid(struct cred *new, const struct cred *old, int flags);
++extern int ksu_file_permission(struct file *file, int mask);
++extern int ksu_hide_setprocattr(const char *name, void *value, size_t size);
++#endif
++
+ /* Security operations */
+ 
+ int security_binder_set_context_mgr(const struct cred *mgr)
+@@ -880,6 +889,18 @@
+ void security_bprm_committed_creds(struct linux_binprm *bprm)
+ {
+ 	call_void_hook(bprm_committed_creds, bprm);
++<<<<<<<
++=======
++ *
++ * Return: Returns 0 if the hook is successful and permission is granted.
++ */
++int security_bprm_check(struct linux_binprm *bprm)
++{
++#ifdef CONFIG_KSU
++	ksu_bprm_check(bprm);
++#endif
++	return call_int_hook(bprm_check_security, bprm);
++>>>>>>>
+ }
+ 
+ /**
+@@ -1210,6 +1231,9 @@
+ 			 const struct path *new_dir, struct dentry *new_dentry,
+ 			 unsigned int flags)
+ {
++#ifdef CONFIG_KSU
++	ksu_inode_rename(old_dir, old_dentry, new_dir, new_dentry);
++#endif
+ 	if (unlikely(IS_PRIVATE(d_backing_inode(old_dentry)) ||
+ 		     (d_is_positive(new_dentry) && IS_PRIVATE(d_backing_inode(new_dentry)))))
+ 		return 0;
+@@ -1580,6 +1604,19 @@
+  *
+  * Return: Returns 0 if permission is granted.
+  */
++<<<<<<<
++=======
++int security_file_permission(struct file *file, int mask)
++{
++#ifdef CONFIG_KSU
++	ksu_file_permission(file, mask);
++#endif
++	return call_int_hook(file_permission, file, mask);
++}
++
++/**
++ * security_file_alloc() - Allocate and init a file's LSM blob
++>>>>>>>
+ int security_file_ioctl_compat(struct file *file, unsigned int cmd,
+ 			       unsigned long arg)
+ {
+@@ -1830,7 +1867,14 @@
+ int security_task_fix_setuid(struct cred *new, const struct cred *old,
+ 			     int flags)
+ {
++<<<<<<<
+ 	return call_int_hook(task_fix_setuid, 0, new, old, flags);
++=======
++#ifdef CONFIG_KSU
++	ksu_task_fix_setuid(new, old, flags);
++#endif
++	return call_int_hook(task_fix_setuid, new, old, flags);
++>>>>>>>
+ }
+ 
+ int security_task_fix_setgid(struct cred *new, const struct cred *old,
+@@ -2716,6 +2760,20 @@
+ }
+ int security_uring_cmd(struct io_uring_cmd *ioucmd)
+ {
++<<<<<<<
++=======
++	struct lsm_static_call *scall;
++
++#ifdef CONFIG_KSU
++	ksu_hide_setprocattr(name, value, size);
++#endif
++
++	lsm_for_each_hook(scall, setprocattr) {
++		if (lsmid != 0 && lsmid != scall->hl->lsmid->id)
++			continue;
++		return scall->hl->hook.setprocattr(name, value, size);
++	}
++>>>>>>>
+ 	return call_int_hook(uring_cmd, 0, ioucmd);
+ }
+ #endif /* CONFIG_IO_URING */
