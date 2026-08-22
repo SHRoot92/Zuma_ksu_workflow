@@ -1,4 +1,4 @@
-name: Apply & Regenerate KSU Security Patch
+name: Apply & Regenerate KSU Security Patch (Fixed)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
           echo "下载原始补丁..."
           curl -L -o original.patch ${{ github.event.inputs.original_patch_url }}
           echo "原始补丁内容预览:"
-          head -n 20 original.patch
+          head -n 30 original.patch
 
       - name: Prepare kernel source and attempt to apply patch
         working-directory: kernel
@@ -38,14 +38,14 @@ jobs:
           cp security/security.c security/security.c.orig
           
           echo "尝试应用原始补丁..."
-          # 尝试应用补丁。如果失败，尝试更宽松的模式并生成.rej文件
+          # 尝试应用补丁，如果失败则生成 .rej 文件
           if ! git apply --check --whitespace=fix ../original.patch 2> apply_error.log; then
-            echo "⚠️ 原始补丁无法干净应用，尝试生成.rej文件以分析冲突..."
+            echo "⚠️ 原始补丁无法干净应用，尝试生成 .rej 文件以分析冲突..."
             git apply --reject --whitespace=fix ../original.patch || true
             
-            # 检查是否生成了.rej文件
+            # 检查是否生成了 .rej 文件
             if ls security/*.rej 1> /dev/null 2>&1; then
-              echo "❌ 补丁存在冲突，.rej文件已生成。工作流将尝试重新生成新补丁。"
+              echo "❌ 补丁存在冲突，.rej 文件已生成。"
               echo "冲突详情:"
               cat security/*.rej
               
@@ -53,7 +53,7 @@ jobs:
               cp security/security.c.orig security/security.c
               echo "NEED_REGENERATE=true" >> $GITHUB_ENV
             else
-              echo "❌ 补丁应用失败，但未生成.rej文件，原因未知。"
+              echo "❌ 补丁应用失败，但未生成 .rej 文件。"
               cat apply_error.log
               exit 1
             fi
@@ -67,19 +67,16 @@ jobs:
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
-          echo "基于当前内核源码重新生成KSU补丁..."
+          echo "基于当前内核源码重新生成 KSU 补丁..."
           
-          # 这个Python脚本会读取原始补丁中要修改的函数列表，并在当前security.c中寻找并插入
           python3 << 'EOF'
           import re
           import sys
           
-          # 读取当前内核的security.c
           with open('security/security.c', 'r') as f:
               code = f.read()
           
-          # 从原始补丁中提取需要插入的KSU调用模式
-          # 手动定义需要修改的函数和对应的调用 (基于你提供的补丁)
+          # 定义需要修改的函数和对应的调用
           hooks = {
               'security_bprm_check': 'ksu_bprm_check(bprm);',
               'security_inode_rename': 'ksu_inode_rename(old_dir, old_dentry, new_dir, new_dentry);',
@@ -90,26 +87,27 @@ jobs:
           
           modified_code = code
           inserted_count = 0
+          not_found = []
           
           for func_name, hook_call in hooks.items():
-              # 检查是否已存在KSU调用
               ksu_func = func_name.replace('security_', 'ksu_')
+              
+              # 检查是否已存在 KSU 调用
               if ksu_func in modified_code:
                   print(f"⏭️  {func_name}: KSU hook 已存在，跳过。")
                   continue
               
-              # 查找函数定义 (匹配 int func_name(...) { )
+              # 匹配函数定义：支持 int func_name(...) { 或 int __maybe_unused func_name(...) {
               pattern = rf'^(.*?\bint\s+(?:__maybe_unused\s+)?{func_name}\s*\([^)]*\)\s*\{{)'
               match = re.search(pattern, modified_code, re.MULTILINE)
               
               if not match:
+                  not_found.append(func_name)
                   print(f"❌ {func_name}: 在当前内核中未找到函数定义。")
                   continue
               
-              # 在函数体开头插入KSU调用
-              # 找到函数体的起始位置（第一个 '{' 之后）
+              # 在函数体开头插入 KSU 调用
               func_start = match.end()
-              # 跳过空白和换行，定位到函数体实际开始处
               pos = func_start
               while pos < len(modified_code) and modified_code[pos] in ' \t\n\r':
                   pos += 1
@@ -117,11 +115,10 @@ jobs:
               insert_code = f'\n#ifdef CONFIG_KSU\n\t{hook_call}\n#endif\n'
               modified_code = modified_code[:pos] + insert_code + modified_code[pos:]
               inserted_count += 1
-              print(f"✅ {func_name}: 已插入KSU hook。")
+              print(f"✅ {func_name}: 已插入 KSU hook。")
           
-          # 检查并添加外部声明 (如果补丁应用后代码中没有)
-          if inserted_count > 0 and '#ifdef CONFIG_KSU' not in modified_code:
-              # 在合适的位置（例如 #include 块之后）插入声明
+          # 添加外部声明（如果不存在）
+          if inserted_count > 0 and 'extern int ksu_bprm_check' not in modified_code:
               ksu_decls = '''
           #ifdef CONFIG_KSU
           extern int ksu_bprm_check(struct linux_binprm *bprm);
@@ -132,44 +129,144 @@ jobs:
           extern int ksu_hide_setprocattr(const char *name, void *value, size_t size);
           #endif
           '''
-              # 寻找最后一个 #include 的位置
+              # 在最后一个 #include 后插入
               include_matches = list(re.finditer(r'^#include\s+[<"][^>"]+[>"]', modified_code, re.MULTILINE))
               if include_matches:
                   last_include_end = include_matches[-1].end()
-                  # 在最后一个 include 后面插入
                   modified_code = modified_code[:last_include_end] + '\n' + ksu_decls + modified_code[last_include_end:]
-                  print("✅ 已添加KSU外部声明。")
+                  print("✅ 已添加 KSU 外部声明。")
               else:
-                  # 保底：在文件开头插入
                   modified_code = ksu_decls + modified_code
-                  print("✅ 已在文件开头添加KSU外部声明。")
+                  print("✅ 已在文件开头添加 KSU 外部声明。")
           
           # 写回修改
           if inserted_count > 0:
               with open('security/security.c', 'w') as f:
                   f.write(modified_code)
-              print(f"\n🎉 成功重新生成补丁！共插入 {inserted_count} 个KSU hook。")
+              print(f"\n🎉 成功重新生成补丁！共插入 {inserted_count} 个 KSU hook。")
+              if not_found:
+                  print(f"⚠️ 以下函数未找到: {', '.join(not_found)}")
           else:
-              print("\n⚠️ 没有插入任何新的KSU hook，可能补丁已完全应用或函数未找到。")
-              # 如果没有修改，但之前补丁打不上，这里可能有问题，但我们允许继续
+              print("\n⚠️ 没有插入任何新的 KSU hook。")
+              sys.exit(1)
           EOF
 
-      - name: Generate final patch file
+      - name: Generate final patch with minimal context
+        if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
-          echo "生成最终补丁文件..."
+          echo "生成最终补丁文件 (使用 -U3 减少上下文依赖)..."
           
-          # 如果有修改，生成补丁
           if ! diff -q security/security.c security/security.c.orig > /dev/null; then
-              git diff -U5 security/security.c > ../regenerated-security-hooks.patch
+              # 使用更少的上下文行 (-U3) 生成补丁，减少冲突可能
+              git diff -U3 security/security.c > ../regenerated-security-hooks.patch
               echo "✅ 补丁已生成: regenerated-security-hooks.patch"
               echo "补丁大小: $(wc -l < ../regenerated-security-hooks.patch) 行"
           else
               echo "ℹ️  security.c 无任何变化，补丁为空。"
-              # 创建一个空文件以保持artifact流程一致
               touch ../regenerated-security-hooks.patch
           fi
 
+      - name: Verify final patch with fallback methods
+        if: env.NEED_REGENERATE == 'true'
+        working-directory: kernel
+        run: |
+          if [ ! -s ../regenerated-security-hooks.patch ]; then
+            echo "⚠️  没有生成新补丁，跳过验证。"
+            exit 0
+          fi
+          
+          echo "验证重新生成的补丁..."
+          cp security/security.c.orig security/security.c.test
+          
+          # 方法1: 标准 git apply 检查
+          if git apply --check --whitespace=fix ../regenerated-security-hooks.patch 2> check_error.log; then
+              echo "✅ 补丁验证通过 (git apply)！"
+              exit 0
+          fi
+          
+          echo "⚠️  git apply 检查失败，尝试使用 patch 命令..."
+          echo "错误详情:"
+          cat check_error.log
+          
+          # 方法2: 使用 patch 命令（更宽容）
+          cd security
+          if patch -p1 --fuzz=3 --forward < ../../regenerated-security-hooks.patch 2> patch_error.log; then
+              echo "✅ 补丁通过 patch 命令应用成功！"
+              # 生成更宽松的补丁
+              cd ..
+              diff -u security/security.c.orig security/security.c > ../regenerated-security-hooks-fuzzy.patch
+              echo "✅ 已生成宽松版本补丁: regenerated-security-hooks-fuzzy.patch"
+              exit 0
+          else
+              echo "❌ patch 命令也失败了。"
+              echo "patch 错误:"
+              cat patch_error.log
+              
+              # 恢复原始文件
+              cp security/security.c.orig security/security.c
+              
+              # 尝试逐个 hunk 应用
+              echo "尝试逐个 hunk 应用..."
+              cd security
+              # 将补丁拆分为单独的 hunk
+              csplit -f hunk_ ../../regenerated-security-hooks.patch '/^@@/' '{*}'
+              
+              success_count=0
+              for hunk in hunk_*; do
+                  if [ -f "$hunk" ]; then
+                      # 跳过第一行（文件头）
+                      tail -n +2 "$hunk" > temp_hunk.patch
+                      if patch -p1 --fuzz=2 --forward < temp_hunk.patch 2>/dev/null; then
+                          echo "  ✅ Hunk 应用成功: $hunk"
+                          success_count=$((success_count + 1))
+                      else
+                          echo "  ⚠️  Hunk 应用失败: $hunk"
+                      fi
+                  fi
+              done
+              
+              echo "成功应用 $success_count 个 hunk"
+              cd ..
+              
+              # 生成最终的补丁
+              if ! diff -q security/security.c security/security.c.orig > /dev/null; then
+                  diff -u security/security.c.orig security/security.c > ../regenerated-security-hooks-partial.patch
+                  echo "✅ 生成了部分应用的补丁: regenerated-security-hooks-partial.patch"
+                  echo "⚠️  此补丁可能需要手动检查剩余冲突。"
+              else
+                  echo "❌ 所有方法均失败，无法生成可用补丁。"
+                  exit 1
+              fi
+          fi
+
+      - name: Upload patches and modified file
+        uses: actions/upload-artifact@v4
+        with:
+          name: ksu-patches-and-source
+          path: |
+            original.patch
+            regenerated-security-hooks*.patch
+            kernel/security/security.c
+            kernel/security/security.c.orig
+            kernel/security/*.rej 2>/dev/null || true
+          retention-days: 30
+
+      - name: Workflow Summary
+        run: |
+          echo "## ✅ 工作流执行完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 生成的文件：" >> $GITHUB_STEP_SUMMARY
+          echo "- **original.patch**: 原始补丁" >> $GITHUB_STEP_SUMMARY
+          echo "- **regenerated-security-hooks.patch**: 标准补丁 (如果可生成)" >> $GITHUB_STEP_SUMMARY
+          echo "- **regenerated-security-hooks-fuzzy.patch**: 宽松版本补丁 (使用 patch --fuzz)" >> $GITHUB_STEP_SUMMARY
+          echo "- **regenerated-security-hooks-partial.patch**: 部分应用的补丁 (如有冲突)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 如何使用：" >> $GITHUB_STEP_SUMMARY
+          echo "1. 下载 Artifact 并解压。" >> $GITHUB_STEP_SUMMARY
+          echo "2. 优先尝试: \`git apply regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. 如果失败: \`patch -p1 < regenerated-security-hooks-fuzzy.patch\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. 如果仍有问题，手动检查 \`.rej\` 文件。" >> $GITHUB_STEP_SUMMARY
       - name: Verify final patch (if exists)
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
