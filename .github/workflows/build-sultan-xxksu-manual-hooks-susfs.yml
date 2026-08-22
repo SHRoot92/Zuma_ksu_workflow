@@ -76,7 +76,7 @@ jobs:
       - name: ksu manual hook 
         working-directory: sultan
         run: |
-          #patch -p1 -l  < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
+          patch -p1 -l  < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
           patch -p1 -l  < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch"
           
           
@@ -170,7 +170,7 @@ jobs:
           CONFIG_BPF_UNPRIV_DEFAULT_OFF=y
           CONFIG_KSU=y
           CONFIG_KSU_EXTRAS=y
-          CONFIG_KSU_LSM_SECURITY_HOOKS=y
+          CONFIG_KSU_LSM_SECURITY_HOOKS=n
           CONFIG_KSU_KPROBES_KSUD=n
           CONFIG_SECURITY_NETWORK=y
           CONFIG_CGROUPS=y
