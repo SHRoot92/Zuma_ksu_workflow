@@ -1,4 +1,4 @@
-name: Apply & Regenerate KSU Security Patch (Fixed)
+name: Apply & Regenerate KSU Security Patch (Final Fix)
 
 on:
   workflow_dispatch:
@@ -34,8 +34,9 @@ jobs:
       - name: Prepare kernel source and attempt to apply patch
         working-directory: kernel
         run: |
-          # 备份原始文件
+          # 备份原始文件（确保路径正确）
           cp security/security.c security/security.c.orig
+          ls -la security/security.c.orig  # 验证备份存在
           
           echo "尝试应用原始补丁..."
           # 尝试应用补丁，如果失败则生成 .rej 文件
@@ -160,14 +161,16 @@ jobs:
           if ! diff -q security/security.c security/security.c.orig > /dev/null; then
               # 使用更少的上下文行 (-U3) 生成补丁，减少冲突可能
               git diff -U3 security/security.c > ../regenerated-security-hooks.patch
-              echo "✅ 补丁已生成: regenerated-security-hooks.patch"
+              # 清理尾随空格（patch 命令对尾随空格敏感）
+              sed -i 's/[[:space:]]*$//' ../regenerated-security-hooks.patch
+              echo "✅ 补丁已生成并清理了尾随空格: regenerated-security-hooks.patch"
               echo "补丁大小: $(wc -l < ../regenerated-security-hooks.patch) 行"
           else
               echo "ℹ️  security.c 无任何变化，补丁为空。"
               touch ../regenerated-security-hooks.patch
           fi
 
-      - name: Verify final patch with fallback methods
+      - name: Verify final patch with multiple methods
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
@@ -177,11 +180,24 @@ jobs:
           fi
           
           echo "验证重新生成的补丁..."
+          
+          # 确保备份文件存在
+          if [ ! -f security/security.c.orig ]; then
+              echo "❌ 备份文件 security/security.c.orig 不存在！"
+              cp security/security.c security/security.c.orig
+          fi
+          
+          # 创建测试副本
           cp security/security.c.orig security/security.c.test
           
           # 方法1: 标准 git apply 检查
+          echo "方法1: 尝试 git apply..."
           if git apply --check --whitespace=fix ../regenerated-security-hooks.patch 2> check_error.log; then
               echo "✅ 补丁验证通过 (git apply)！"
+              # 实际应用补丁到测试文件
+              cp security/security.c.orig security/security.c.test
+              git apply --whitespace=fix ../regenerated-security-hooks.patch
+              echo "✅ 补丁已成功应用到测试文件。"
               exit 0
           fi
           
@@ -190,12 +206,16 @@ jobs:
           cat check_error.log
           
           # 方法2: 使用 patch 命令（更宽容）
+          echo "方法2: 尝试 patch 命令..."
           cd security
+          # 使用 -p1 并指定文件路径，避免交互
           if patch -p1 --fuzz=3 --forward < ../../regenerated-security-hooks.patch 2> patch_error.log; then
               echo "✅ 补丁通过 patch 命令应用成功！"
-              # 生成更宽松的补丁
               cd ..
+              # 生成更宽松的补丁
               diff -u security/security.c.orig security/security.c > ../regenerated-security-hooks-fuzzy.patch
+              # 清理尾随空格
+              sed -i 's/[[:space:]]*$//' ../regenerated-security-hooks-fuzzy.patch
               echo "✅ 已生成宽松版本补丁: regenerated-security-hooks-fuzzy.patch"
               exit 0
           else
@@ -206,17 +226,18 @@ jobs:
               # 恢复原始文件
               cp security/security.c.orig security/security.c
               
-              # 尝试逐个 hunk 应用
-              echo "尝试逐个 hunk 应用..."
+              # 方法3: 尝试逐个 hunk 应用
+              echo "方法3: 尝试逐个 hunk 应用..."
               cd security
-              # 将补丁拆分为单独的 hunk
-              csplit -f hunk_ ../../regenerated-security-hooks.patch '/^@@/' '{*}'
+              
+              # 提取所有 hunk 并逐个尝试
+              awk '/^@@ /{n++; f=sprintf("hunk_%03d.patch", n);} {print > f;}' ../../regenerated-security-hooks.patch
               
               success_count=0
-              for hunk in hunk_*; do
+              for hunk in hunk_*.patch; do
                   if [ -f "$hunk" ]; then
-                      # 跳过第一行（文件头）
-                      tail -n +2 "$hunk" > temp_hunk.patch
+                      # 跳过文件头，只保留 hunk 内容
+                      sed -n '/^@@ /,$p' "$hunk" > temp_hunk.patch
                       if patch -p1 --fuzz=2 --forward < temp_hunk.patch 2>/dev/null; then
                           echo "  ✅ Hunk 应用成功: $hunk"
                           success_count=$((success_count + 1))
@@ -232,8 +253,14 @@ jobs:
               # 生成最终的补丁
               if ! diff -q security/security.c security/security.c.orig > /dev/null; then
                   diff -u security/security.c.orig security/security.c > ../regenerated-security-hooks-partial.patch
+                  # 清理尾随空格
+                  sed -i 's/[[:space:]]*$//' ../regenerated-security-hooks-partial.patch
                   echo "✅ 生成了部分应用的补丁: regenerated-security-hooks-partial.patch"
                   echo "⚠️  此补丁可能需要手动检查剩余冲突。"
+                  
+                  # 显示修改状态
+                  echo "修改统计:"
+                  diff --stat security/security.c security/security.c.orig || true
               else
                   echo "❌ 所有方法均失败，无法生成可用补丁。"
                   exit 1
@@ -258,55 +285,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 生成的文件：" >> $GITHUB_STEP_SUMMARY
           echo "- **original.patch**: 原始补丁" >> $GITHUB_STEP_SUMMARY
-          echo "- **regenerated-security-hooks.patch**: 标准补丁 (如果可生成)" >> $GITHUB_STEP_SUMMARY
+          echo "- **regenerated-security-hooks.patch**: 标准补丁 (已清理尾随空格)" >> $GITHUB_STEP_SUMMARY
           echo "- **regenerated-security-hooks-fuzzy.patch**: 宽松版本补丁 (使用 patch --fuzz)" >> $GITHUB_STEP_SUMMARY
           echo "- **regenerated-security-hooks-partial.patch**: 部分应用的补丁 (如有冲突)" >> $GITHUB_STEP_SUMMARY
+          echo "- **security.c**: 最终修改后的安全源文件" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 如何使用：" >> $GITHUB_STEP_SUMMARY
           echo "1. 下载 Artifact 并解压。" >> $GITHUB_STEP_SUMMARY
           echo "2. 优先尝试: \`git apply regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
           echo "3. 如果失败: \`patch -p1 < regenerated-security-hooks-fuzzy.patch\`" >> $GITHUB_STEP_SUMMARY
           echo "4. 如果仍有问题，手动检查 \`.rej\` 文件。" >> $GITHUB_STEP_SUMMARY
-      - name: Verify final patch (if exists)
-        if: env.NEED_REGENERATE == 'true'
-        working-directory: kernel
-        run: |
-          if [ -s ../regenerated-security-hooks.patch ]; then
-            echo "验证重新生成的补丁..."
-            # 恢复原始文件进行测试
-            cp security/security.c.orig security/security.c.test
-            
-            # 尝试应用新补丁
-            if git apply --check ../regenerated-security-hooks.patch; then
-              echo "✅ 重新生成的补丁验证通过，可以干净应用！"
-            else
-              echo "❌ 重新生成的补丁仍然无法应用，请检查。"
-              exit 1
-            fi
-          else
-            echo "⚠️  没有生成新补丁，跳过验证。"
-          fi
-
-      - name: Upload patches and modified file
-        uses: actions/upload-artifact@v4
-        with:
-          name: ksu-patches-and-source
-          path: |
-            original.patch
-            regenerated-security-hooks.patch
-            kernel/security/security.c
-            kernel/security/security.c.orig
-          retention-days: 30
-
-      - name: Workflow Summary
-        run: |
-          echo "## ✅ 工作流执行完成" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 生成的文件：" >> $GITHUB_STEP_SUMMARY
-          echo "- **original.patch**: 你提供的原始补丁" >> $GITHUB_STEP_SUMMARY
-          echo "- **regenerated-security-hooks.patch**: 基于最新内核源码重新生成的新补丁 (如果原始补丁冲突)" >> $GITHUB_STEP_SUMMARY
-          echo "- **security.c**: 最终修改后的安全源文件" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 如何使用：" >> $GITHUB_STEP_SUMMARY
-          echo "1. 从Actions运行的Artifacts区域下载 `ksu-patches-and-source.zip`。" >> $GITHUB_STEP_SUMMARY
-          echo "2. 在目标内核目录执行: \`git apply regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
