@@ -34,11 +34,8 @@ jobs:
       - name: Prepare kernel source
         working-directory: kernel
         run: |
-          # 确保在正确目录
           pwd
           ls -la security/
-          
-          # 备份原始文件
           cp security/security.c security/security.c.orig
           echo "✅ 备份文件已创建: security/security.c.orig"
           ls -la security/security.c.orig
@@ -47,8 +44,6 @@ jobs:
         working-directory: kernel
         run: |
           echo "尝试应用原始补丁..."
-          
-          # 尝试 git apply
           if git apply --check --whitespace=fix ../original.patch 2> apply_error.log; then
             echo "✅ 原始补丁可以干净应用！"
             git apply --whitespace=fix ../original.patch
@@ -56,7 +51,6 @@ jobs:
           else
             echo "⚠️ 原始补丁无法干净应用，将重新生成。"
             cat apply_error.log
-            # 恢复原始文件
             cp security/security.c.orig security/security.c
             echo "NEED_REGENERATE=true" >> $GITHUB_ENV
           fi
@@ -67,12 +61,11 @@ jobs:
         run: |
           echo "基于当前内核源码重新生成 KSU 补丁..."
           
-          python3 << 'EOF'
+          python3 << 'PYTHON_SCRIPT'
           import re
           import sys
           import os
           
-          # 确保文件存在
           if not os.path.exists('security/security.c'):
               print("❌ security/security.c 不存在！")
               sys.exit(1)
@@ -80,7 +73,6 @@ jobs:
           with open('security/security.c', 'r') as f:
               code = f.read()
           
-          # 定义需要修改的函数和对应的调用
           hooks = {
               'security_bprm_check': 'ksu_bprm_check(bprm);',
               'security_inode_rename': 'ksu_inode_rename(old_dir, old_dentry, new_dir, new_dentry);',
@@ -96,12 +88,10 @@ jobs:
           for func_name, hook_call in hooks.items():
               ksu_func = func_name.replace('security_', 'ksu_')
               
-              # 检查是否已存在 KSU 调用
               if ksu_func in modified_code:
                   print(f"⏭️  {func_name}: KSU hook 已存在，跳过。")
                   continue
               
-              # 匹配函数定义
               pattern = rf'^(.*?\bint\s+(?:__maybe_unused\s+)?{func_name}\s*\([^)]*\)\s*\{{)'
               match = re.search(pattern, modified_code, re.MULTILINE)
               
@@ -110,7 +100,6 @@ jobs:
                   print(f"❌ {func_name}: 在当前内核中未找到函数定义。")
                   continue
               
-              # 在函数体开头插入 KSU 调用
               func_start = match.end()
               pos = func_start
               while pos < len(modified_code) and modified_code[pos] in ' \t\n\r':
@@ -121,7 +110,6 @@ jobs:
               inserted_count += 1
               print(f"✅ {func_name}: 已插入 KSU hook。")
           
-          # 添加外部声明
           if inserted_count > 0 and 'extern int ksu_bprm_check' not in modified_code:
               ksu_decls = '''
           #ifdef CONFIG_KSU
@@ -133,7 +121,6 @@ jobs:
           extern int ksu_hide_setprocattr(const char *name, void *value, size_t size);
           #endif
           '''
-              # 在最后一个 #include 后插入
               include_matches = list(re.finditer(r'^#include\s+[<"][^>"]+[>"]', modified_code, re.MULTILINE))
               if include_matches:
                   last_include_end = include_matches[-1].end()
@@ -143,7 +130,6 @@ jobs:
                   modified_code = ksu_decls + modified_code
                   print("✅ 已在文件开头添加 KSU 外部声明。")
           
-          # 写回修改
           if inserted_count > 0:
               with open('security/security.c', 'w') as f:
                   f.write(modified_code)
@@ -153,25 +139,17 @@ jobs:
           else:
               print("\n⚠️ 没有插入任何新的 KSU hook。")
               sys.exit(1)
-          EOF
+          PYTHON_SCRIPT
 
       - name: Generate clean patch
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
           echo "生成补丁文件..."
-          
-          # 生成补丁（使用相对路径）
           git diff -U3 security/security.c > ../regenerated-security-hooks.patch
-          
-          # 清理尾随空格
           sed -i 's/[[:space:]]*$//' ../regenerated-security-hooks.patch
-          
           echo "✅ 补丁已生成: regenerated-security-hooks.patch"
           echo "补丁大小: $(wc -l < ../regenerated-security-hooks.patch) 行"
-          
-          # 显示补丁前几行，确认格式
-          echo "补丁头部:"
           head -n 10 ../regenerated-security-hooks.patch
 
       - name: Verify patch with git apply
@@ -179,27 +157,18 @@ jobs:
         working-directory: kernel
         run: |
           echo "验证补丁 (git apply)..."
-          
-          # 确保备份存在
           if [ ! -f security/security.c.orig ]; then
-              echo "⚠️ 备份文件不存在，创建备份..."
               cp security/security.c security/security.c.orig
           fi
-          
-          # 恢复到原始状态
           cp security/security.c.orig security/security.c.test
-          
-          # 测试 git apply
           if git apply --check --whitespace=fix ../regenerated-security-hooks.patch 2>&1; then
               echo "✅ 补丁验证通过 (git apply)！"
-              # 实际应用到测试文件
               cp security/security.c.orig security/security.c.test
               git apply --whitespace=fix ../regenerated-security-hooks.patch
               echo "✅ 补丁已成功应用到测试文件。"
               exit 0
           else
               echo "⚠️ git apply 失败，将尝试 patch 命令。"
-              # 继续到下一步
           fi
 
       - name: Verify patch with patch command
@@ -207,11 +176,8 @@ jobs:
         working-directory: kernel
         run: |
           echo "验证补丁 (patch 命令)..."
-          
-          # 恢复到原始状态
           cp security/security.c.orig security/security.c
           
-          # 使用 patch 命令，使用 -p0 或 -p1 尝试
           echo "尝试 patch -p1..."
           if patch -p1 --fuzz=3 --forward --no-backup-if-mismatch < ../regenerated-security-hooks.patch 2> patch_error.log; then
               echo "✅ 补丁通过 patch -p1 应用成功！"
@@ -223,8 +189,6 @@ jobs:
           
           echo "patch -p1 失败，尝试 patch -p0..."
           cat patch_error.log
-          
-          # 恢复到原始状态
           cp security/security.c.orig security/security.c
           
           if patch -p0 --fuzz=3 --forward --no-backup-if-mismatch < ../regenerated-security-hooks.patch 2> patch_error_p0.log; then
@@ -237,12 +201,8 @@ jobs:
           
           echo "❌ patch 命令也失败了。"
           cat patch_error_p0.log
-          
-          # 显示补丁内容以便调试
           echo "补丁内容 (前50行):"
           head -n 50 ../regenerated-security-hooks.patch
-          
-          # 检查当前 security.c 的关键函数位置
           echo "当前 security.c 中的函数位置:"
           grep -n "^int security_" security/security.c | head -10
 
@@ -251,15 +211,9 @@ jobs:
         working-directory: kernel
         run: |
           echo "生成简单的 diff 文件..."
-          
-          # 确保文件不同
           if ! diff -q security/security.c security/security.c.orig > /dev/null; then
-              # 生成简单 diff
               diff -u security/security.c.orig security/security.c > ../security-diff.txt
               echo "✅ 生成了 diff 文件: security-diff.txt"
-              
-              # 显示修改统计
-              echo "修改统计:"
               diff --stat security/security.c.orig security/security.c
           else
               echo "⚠️ 文件没有变化，可能补丁已应用。"
@@ -275,7 +229,7 @@ jobs:
             security-diff.txt
             kernel/security/security.c
             kernel/security/security.c.orig
-            kernel/security/*.rej 2>/dev/null || true
+            kernel/security/*.rej
           retention-days: 30
 
       - name: Workflow Summary
