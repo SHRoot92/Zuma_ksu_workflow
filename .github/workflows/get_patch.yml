@@ -1,0 +1,70 @@
+name: Auto-Regenerate Clean Patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_file_url:
+        description: 'Target raw source file URL'
+        required: true
+        default: 'https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/refs/heads/16.0.0-sultan/security/security.c'
+      patch_path:
+        description: 'Path or URL to original patch'
+        required: true
+        default: '.github/patches/manual-security-hooks-v2.0.patch'
+
+jobs:
+  resolve-and-patch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Workspace
+        run: |
+          mkdir -p workspace/security
+          cd workspace
+
+          # Fetch original target file
+          curl -sSL "${{ github.event.inputs.target_file_url }}" -o security/security.c
+          cp security/security.c security/security.c.orig
+
+          # Resolve patch source (local or remote URL)
+          PATCH_INPUT="${{ github.event.inputs.patch_path }}"
+          if [[ "$PATCH_INPUT" =~ ^https?:// ]]; then
+            curl -sSL "$PATCH_INPUT" -o original.patch
+          else
+            cp "../$PATCH_INPUT" original.patch
+          fi
+
+      - name: Apply Patch with 3-Way Fuzzy Fallback
+        working-directory: workspace
+        run: |
+          echo "=== Attempting standard patch apply ==="
+          if patch -p1 --forward < original.patch; then
+            echo "Direct patch application succeeded."
+          else
+            echo "Direct patch failed. Attempting fuzzy 3-way merge apply..."
+            # Restore pristine copy before merge attempt
+            cp security/security.c.orig security/security.c
+            
+            # Apply with fuzz and merge markers if conflicts remain
+            patch -p1 --fuzz=3 --merge < original.patch || true
+          fi
+
+      - name: Generate Clean Patch & Artifacts
+        working-directory: workspace
+        run: |
+          mkdir -p ../output
+          
+          # Generate git-style unified diff against original target
+          diff -uN security/security.c.orig security/security.c > ../output/cleaned-security-hooks.patch || true
+
+          # Collect rejects/orig if any failed hunks exist
+          find . -name "*.rej" -o -name "*.orig" -exec cp {} ../output/ \; 2>/dev/null || true
+
+      - name: Upload Cleaned Patch & Conflict Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-patch-artifacts
+          path: output/
