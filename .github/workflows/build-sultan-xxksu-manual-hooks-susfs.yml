@@ -76,7 +76,7 @@ jobs:
       - name: ksu manual hook 
         working-directory: sultan
         run: |
-          patch -p1 -l  < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
+          #patch -p1 -l  < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
           patch -p1 -l  < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch"
           
           
