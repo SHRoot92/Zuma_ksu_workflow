@@ -225,11 +225,12 @@ jobs:
           name: ksu-patches-and-source
           path: |
             original.patch
-            regenerated-security-hooks*.patch
+            regenerated-security-hooks.patch
+            regenerated-security-hooks-fuzzy.patch
+            regenerated-security-hooks-p0.patch
             security-diff.txt
             kernel/security/security.c
             kernel/security/security.c.orig
-            kernel/security/*.rej
           retention-days: 30
 
       - name: Workflow Summary
