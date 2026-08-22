@@ -1,70 +1,78 @@
-name: Auto-Regenerate Clean Patch
+name: Generate Git-Style Clean Patch
 
 on:
   workflow_dispatch:
     inputs:
       target_file_url:
-        description: 'Target raw source file URL'
+        description: 'Raw URL of the target file'
         required: true
         default: 'https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/refs/heads/16.0.0-sultan/security/security.c'
-      patch_path:
-        description: 'Path or URL to original patch'
+      patch_url:
+        description: 'Raw URL or local path of the original patch'
         required: true
-        default: '.github/patches/manual-security-hooks-v2.0.patch'
+        default: 'https://raw.githubusercontent.com/yapixel/cheetah_kernel_build/main/.github/patches/manual-security-hooks-v2.0.patch'
 
 jobs:
-  resolve-and-patch:
+  build-git-patch:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Workspace
+      - name: Setup Git Workspace & Target Base
         run: |
-          mkdir -p workspace/security
-          cd workspace
+          mkdir -p work_tree
+          cd work_tree
 
-          # Fetch original target file
+          git init -b main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create directory structure and download target source
+          mkdir -p security
           curl -sSL "${{ github.event.inputs.target_file_url }}" -o security/security.c
-          cp security/security.c security/security.c.orig
 
-          # Resolve patch source (local or remote URL)
-          PATCH_INPUT="${{ github.event.inputs.patch_path }}"
-          if [[ "$PATCH_INPUT" =~ ^https?:// ]]; then
-            curl -sSL "$PATCH_INPUT" -o original.patch
+          # Commit target base state
+          git add security/security.c
+          git commit -m "base: pristine security.c from target tree"
+
+      - name: Fetch and Apply Patch
+        working-directory: work_tree
+        run: |
+          PATCH_SRC="${{ github.event.inputs.patch_url }}"
+          if [[ "$PATCH_SRC" =~ ^https?:// ]]; then
+            curl -sSL "$PATCH_SRC" -o input.patch
           else
-            cp "../$PATCH_INPUT" original.patch
+            cp "../$PATCH_SRC" input.patch
           fi
 
-      - name: Apply Patch with 3-Way Fuzzy Fallback
-        working-directory: workspace
-        run: |
-          echo "=== Attempting standard patch apply ==="
-          if patch -p1 --forward < original.patch; then
-            echo "Direct patch application succeeded."
+          echo "=== Attempting git apply with 3way / reject fallback ==="
+          if git apply --3way --verbose input.patch; then
+            echo "Cleanly applied via git apply --3way."
           else
-            echo "Direct patch failed. Attempting fuzzy 3-way merge apply..."
-            # Restore pristine copy before merge attempt
-            cp security/security.c.orig security/security.c
-            
-            # Apply with fuzz and merge markers if conflicts remain
-            patch -p1 --fuzz=3 --merge < original.patch || true
+            echo "Direct apply had rejects. Falling back to fuzzy patch apply..."
+            patch -p1 --fuzz=3 --merge < input.patch || true
           fi
 
-      - name: Generate Clean Patch & Artifacts
-        working-directory: workspace
+      - name: Generate Standard Git Patch
+        working-directory: work_tree
         run: |
-          mkdir -p ../output
-          
-          # Generate git-style unified diff against original target
-          diff -uN security/security.c.orig security/security.c > ../output/cleaned-security-hooks.patch || true
+          mkdir -p ../artifacts
 
-          # Collect rejects/orig if any failed hunks exist
-          find . -name "*.rej" -o -name "*.orig" -exec cp {} ../output/ \; 2>/dev/null || true
+          # Generate git-style unified diff
+          git diff security/security.c > ../artifacts/manual-security-hooks-v2.0-clean.patch
 
-      - name: Upload Cleaned Patch & Conflict Logs
+          # Also generate commit-ready format-patch
+          git add security/security.c
+          git commit -m "security: apply manual security hooks v2.0" || true
+          git format-patch -1 HEAD --output-directory ../artifacts/ || true
+
+          # Collect any leftover reject files if hunk failed completely
+          find . -name "*.rej" -exec cp {} ../artifacts/ \; 2>/dev/null || true
+
+      - name: Upload Clean Git Patch
         uses: actions/upload-artifact@v4
         with:
-          name: resolved-patch-artifacts
-          path: output/
+          name: clean-git-patch
+          path: artifacts/
