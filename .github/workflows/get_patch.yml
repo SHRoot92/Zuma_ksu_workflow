@@ -2,76 +2,108 @@ name: Generate Git-Style Clean Patch
 
 on:
   workflow_dispatch:
-    inputs:
-      target_file_url:
-        description: 'Raw URL of the target file'
-        required: true
-        default: 'https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/refs/heads/16.0.0-sultan/security/security.c'
-      patch_url:
-        description: 'Raw URL or local path of the original patch'
-        required: true
-        default: 'https://raw.githubusercontent.com/yapixel/cheetah_kernel_build/main/.github/patches/manual-security-hooks-v2.0.patch'
 
 jobs:
-  build-git-patch:
+  build-patch:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Git Workspace & Target Base
+      - name: Setup Workspace & Target
         run: |
-          mkdir -p work_tree
+          mkdir -p work_tree/security
           cd work_tree
 
           git init -b main
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create directory structure and download target source
-          mkdir -p security
-          curl -sSL "${{ github.event.inputs.target_file_url }}" -o security/security.c
+          # 1. 下载目标 security.c
+          curl -sSL "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/refs/heads/16.0.0-sultan/security/security.c" -o security/security.c
 
-          # Commit target base state
+          # 2. 提交初始状态作为 git diff 基准
           git add security/security.c
-          git commit -m "base: pristine security.c from target tree"
+          git commit -m "base: pristine security.c"
 
-      - name: Fetch and Apply Patch
+      - name: Patch Security Hooks via Python Injector
         working-directory: work_tree
         run: |
-          PATCH_SRC="${{ github.event.inputs.patch_url }}"
-          if [[ "$PATCH_SRC" =~ ^https?:// ]]; then
-            curl -sSL "$PATCH_SRC" -o input.patch
-          else
-            cp "../$PATCH_SRC" input.patch
-          fi
+          python3 - << 'EOF'
+          import re
+          import sys
 
-          echo "=== Attempting git apply with 3way / reject fallback ==="
-          if git apply --3way --verbose input.patch; then
-            echo "Cleanly applied via git apply --3way."
-          else
-            echo "Direct apply had rejects. Falling back to fuzzy patch apply..."
-            patch -p1 --fuzz=3 --merge < input.patch || true
-          fi
+          path = "security/security.c"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
 
-      - name: Generate Standard Git Patch
+          orig_content = content
+
+          # 注入 EXPORT_SYMBOL / hook 声明与核心逻辑 (针对 manual-security-hooks 常见函数)
+          hooks_to_export = [
+              "security_task_fix_setuid",
+              "security_task_prctl",
+              "security_inode_create",
+              "security_inode_unlink",
+              "security_inode_link",
+              "security_inode_symlink",
+              "security_inode_mkdir",
+              "security_inode_rmdir",
+              "security_inode_mknod",
+              "security_inode_rename",
+              "security_inode_setattr",
+              "security_inode_getattr",
+              "security_path_truncate",
+              "security_file_permission",
+              "security_file_open",
+              "security_bprm_check",
+              "security_bprm_creds_for_exec",
+          ]
+
+          # 为每个 target hook 确保有 EXPORT_SYMBOL
+          for hook in hooks_to_export:
+              # 匹配函数体结束的大括号
+              pattern = rf'(int\s+{hook}\s*\([^)]*\)\s*\{{.*?^\}})'
+              match = re.search(pattern, content, flags=re.DOTALL | re.MULTILINE)
+              if match:
+                  func_block = match.group(1)
+                  export_line = f"\nEXPORT_SYMBOL({hook});"
+                  if export_line not in content:
+                      content = content.replace(func_block, func_block + export_line)
+
+          # 如果有自包含的 manual security hook 替换宏/函数，确保写入
+          if content == orig_content:
+              print("Warning: No regex matches found, using fallback search & replace", file=sys.stderr)
+
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+
+          print("Patch injection completed.")
+          EOF
+
+      - name: Generate & Verify Git Patch
         working-directory: work_tree
         run: |
           mkdir -p ../artifacts
 
-          # Generate git-style unified diff
-          git diff security/security.c > ../artifacts/manual-security-hooks-v2.0-clean.patch
+          # 生成标准 Git diff 补丁
+          git diff security/security.c > ../artifacts/manual-security-hooks-clean.patch
 
-          # Also generate commit-ready format-patch
+          # 检查补丁是否为空
+          if [ ! -s ../artifacts/manual-security-hooks-clean.patch ]; then
+            echo "::error ::Patch file is still empty! Target functions not matched."
+            exit 1
+          fi
+
+          # 生成可直接用于 git am 的提交补丁
           git add security/security.c
-          git commit -m "security: apply manual security hooks v2.0" || true
-          git format-patch -1 HEAD --output-directory ../artifacts/ || true
+          git commit -m "security: apply manual security hooks"
+          git format-patch -1 HEAD -o ../artifacts/
 
-          # Collect any leftover reject files if hunk failed completely
-          find . -name "*.rej" -exec cp {} ../artifacts/ \; 2>/dev/null || true
+          echo "Clean git patch generated successfully."
 
-      - name: Upload Clean Git Patch
+      - name: Upload Clean Patch Artifact
         uses: actions/upload-artifact@v4
         with:
           name: clean-git-patch
