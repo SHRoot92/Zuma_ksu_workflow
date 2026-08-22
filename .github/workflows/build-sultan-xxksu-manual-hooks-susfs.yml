@@ -73,7 +73,7 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
           patch -p1 < ../kernel_patches/sultan/0001-modify-noinline.patch
           
-      - name: ksu manual hook 
+      - name: KSU Manual Hook 
         working-directory: sultan
         run: |
           patch -p1 -l  < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
