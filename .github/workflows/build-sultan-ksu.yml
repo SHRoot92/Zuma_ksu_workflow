@@ -63,10 +63,11 @@ env:
 
 jobs:
   matrix_prep:
-    name: Prepare Environment
+    name: Prepare Environment & Inspect Upstream
     runs-on: ubuntu-latest
     outputs:
       susfs_matrix: ${{ steps.set-matrix.outputs.susfs_matrix }}
+      sultan_sha: ${{ steps.upstream.outputs.sultan_sha }}
     steps:
       - id: set-matrix
         run: |
@@ -76,6 +77,15 @@ jobs:
           else
             echo "susfs_matrix=[\"$SUSFS_INPUT\"]" >> "$GITHUB_OUTPUT"
           fi
+
+      - id: upstream
+        run: |
+          SULTAN_SHA=$(git ls-remote https://github.com/kerneltoast/android_kernel_google_tensynos.git refs/heads/16.0.0-sultan | awk '{print $1}')
+          if [ -z "$SULTAN_SHA" ]; then
+            SULTAN_SHA="latest"
+          fi
+          echo "Sultan upstream SHA: $SULTAN_SHA"
+          echo "sultan_sha=$SULTAN_SHA" >> "$GITHUB_OUTPUT"
 
   build_manual:
     name: Manual Hook (SUSFS=${{ matrix.enable_susfs }})
@@ -90,6 +100,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Configure Fast Git Protocol
+        run: |
+          git config --global protocol.version 2
+          git config --global http.postBuffer 524288000
+          git config --global http.version HTTP/2
+          git config --global core.compression 0
 
       - name: Free Disk Space & Install Fast Tools
         run: |
@@ -161,9 +178,23 @@ jobs:
           echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
+      - name: Cache Sultan Kernel Source
+        id: sultan-kernel-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ github.workspace }}/sultan
+          key: kernel-src-sultan-${{ needs.matrix_prep.outputs.sultan_sha }}
+
       - name: Clone Source
         run: |
-          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          if [ "${{ steps.sultan-kernel-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "sultan/.git" ]; then
+            echo "⚡ Cache miss: Cloning Sultan kernel source..."
+            rm -rf sultan
+            git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          else
+            echo "✅ Sultan Kernel Source restored from Action Cache!"
+          fi
+
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
@@ -360,6 +391,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Fast Git Protocol
+        run: |
+          git config --global protocol.version 2
+          git config --global http.postBuffer 524288000
+          git config --global http.version HTTP/2
+          git config --global core.compression 0
+
       - name: Free Disk Space & Install Fast Tools
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
@@ -430,9 +468,23 @@ jobs:
           echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
+      - name: Cache Sultan Kernel Source
+        id: sultan-kernel-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ github.workspace }}/sultan
+          key: kernel-src-sultan-${{ needs.matrix_prep.outputs.sultan_sha }}
+
       - name: Clone Source
         run: |
-          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          if [ "${{ steps.sultan-kernel-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "sultan/.git" ]; then
+            echo "⚡ Cache miss: Cloning Sultan kernel source..."
+            rm -rf sultan
+            git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          else
+            echo "✅ Sultan Kernel Source restored from Action Cache!"
+          fi
+
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
           git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
