@@ -126,10 +126,10 @@ jobs:
           path: |
             ${{ github.workspace }}/.ccache
             ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ matrix.enable_susfs }}-${{ github.run_id }}
+          key: toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ github.run_id }}
           restore-keys: |
-            toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ matrix.enable_susfs }}-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-manual-
+            toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-manual-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-
 
       - name: Install ARM Toolchain
@@ -403,10 +403,10 @@ jobs:
           path: |
             ${{ github.workspace }}/.ccache
             ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ matrix.enable_susfs }}-${{ github.run_id }}
+          key: toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ github.run_id }}
           restore-keys: |
-            toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ matrix.enable_susfs }}-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-
+            toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-lsm-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-
 
       - name: Install ARM Toolchain
