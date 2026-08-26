@@ -116,17 +116,23 @@ jobs:
             KERNEL_VER="6.1"
           fi
 
+          SUSFS_VER="unknown"
+          if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
+            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}')
+          fi
+
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
+          echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
           echo "======================================"
           echo "🏷️ Sultan Tag: $S_TAG"
           echo "🐧 Kernel Base: Linux $KERNEL_VER"
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: manual"
-          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }}"
+          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
           echo "======================================"
 
@@ -203,6 +209,7 @@ jobs:
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           KERNEL_VER="${{ steps.meta.outputs.kernel_ver }}"
+          SUSFS_VER="${{ steps.meta.outputs.susfs_ver }}"
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             BRANCH_TAG="-staging"
@@ -211,7 +218,7 @@ jobs:
           fi
           
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            SUSFS_TAG="-SUSFS"
+            SUSFS_TAG="-SUSFS_${SUSFS_VER}"
           else
             SUSFS_TAG=""
           fi
@@ -303,17 +310,23 @@ jobs:
             KERNEL_VER="6.1"
           fi
 
+          SUSFS_VER="unknown"
+          if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
+            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}')
+          fi
+
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
           echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
+          echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
           echo "======================================"
           echo "🏷️ Sultan Tag: $S_TAG"
           echo "🐧 Kernel Base: Linux $KERNEL_VER"
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: lsm (Hookless/BL)"
-          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }}"
+          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
           echo "======================================"
 
@@ -383,6 +396,7 @@ jobs:
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           KERNEL_VER="${{ steps.meta.outputs.kernel_ver }}"
+          SUSFS_VER="${{ steps.meta.outputs.susfs_ver }}"
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             BRANCH_TAG="-staging"
@@ -391,7 +405,7 @@ jobs:
           fi
           
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            SUSFS_TAG="-SUSFS"
+            SUSFS_TAG="-SUSFS_${SUSFS_VER}"
           else
             SUSFS_TAG=""
           fi
