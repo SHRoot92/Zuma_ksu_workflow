@@ -29,6 +29,11 @@ on:
           - 'true'
           - 'false'
         default: 'all'
+      use_ccache:
+        description: 'Enable Ccache'
+        required: true
+        type: boolean
+        default: true
       create_release:
         description: 'Create GitHub Release'
         required: true
@@ -51,6 +56,7 @@ env:
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_REPO: backslashxx/KernelSU
   GCC_VERSION: "14.2.rel1"
+  CCACHE_DIR: "${{ github.workspace }}/.ccache"
 
 jobs:
   matrix_prep:
@@ -81,6 +87,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Free Disk Space & Install Dependencies
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
+
+      - name: Restore Ccache
+        if: github.event.inputs.use_ccache != 'false'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
+          restore-keys: |
+            ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
+            ccache-gs201-manual-${{ matrix.enable_susfs }}-
+
+      - name: Setup Ccache Configurations
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          ccache -M 5G \
+            -o hash_dir=false \
+            -o compiler_check=content \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules" \
+            -o depend_mode=true \
+            -o run_second_cpp=true \
+            -o compression=true \
+            -o compression_level=1 \
+            -o keep_comments_cpp=true \
+            -o "cache_dir=${{ env.CCACHE_DIR }}" \
+            -o "base_dir=${{ github.workspace }}" \
+            -o file_clone=false \
+            -o hard_link=false \
+            -z
 
       - name: Install GCC
         run: |
@@ -134,6 +176,7 @@ jobs:
           echo "🪝 Hook Mode: manual"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
+          echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
       - name: KSU Base & Sultan Patches
@@ -196,9 +239,20 @@ jobs:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
           CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
         run: |
+          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
+            CC="ccache ${{ env.GCC_PATH }}gcc"
+          else
+            CC="${{ env.GCC_PATH }}gcc"
+          fi
+          echo "Compiling with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+
+      - name: Ccache Performance Stats
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          echo "=== Ccache Performance Stats (manual, SUSFS=${{ matrix.enable_susfs }}) ==="
+          ccache -s
 
       - name: Package
         run: |
@@ -276,6 +330,42 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Free Disk Space & Install Dependencies
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
+
+      - name: Restore Ccache
+        if: github.event.inputs.use_ccache != 'false'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
+          restore-keys: |
+            ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
+            ccache-gs201-lsm-${{ matrix.enable_susfs }}-
+
+      - name: Setup Ccache Configurations
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          ccache -M 5G \
+            -o hash_dir=false \
+            -o compiler_check=content \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules" \
+            -o depend_mode=true \
+            -o run_second_cpp=true \
+            -o compression=true \
+            -o compression_level=1 \
+            -o keep_comments_cpp=true \
+            -o "cache_dir=${{ env.CCACHE_DIR }}" \
+            -o "base_dir=${{ github.workspace }}" \
+            -o file_clone=false \
+            -o hard_link=false \
+            -z
+
       - name: Install GCC
         run: |
           BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
@@ -328,6 +418,7 @@ jobs:
           echo "🪝 Hook Mode: lsm (Hookless/BL)"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
+          echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
       - name: KSU Base & Sultan Patches
@@ -383,9 +474,20 @@ jobs:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
           CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
         run: |
+          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
+            CC="ccache ${{ env.GCC_PATH }}gcc"
+          else
+            CC="${{ env.GCC_PATH }}gcc"
+          fi
+          echo "Compiling with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+
+      - name: Ccache Performance Stats
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          echo "=== Ccache Performance Stats (lsm, SUSFS=${{ matrix.enable_susfs }}) ==="
+          ccache -s
 
       - name: Package
         run: |
