@@ -30,7 +30,7 @@ on:
           - 'false'
         default: 'all'
       use_ccache:
-        description: 'Enable Ccache'
+        description: 'Enable Ccache Acceleration'
         required: true
         type: boolean
         default: true
@@ -57,6 +57,9 @@ env:
   KSU_REPO: backslashxx/KernelSU
   GCC_VERSION: "14.2.rel1"
   CCACHE_DIR: "${{ github.workspace }}/.ccache"
+  CCACHE_COMPILERCHECK: "content"
+  CCACHE_NOHASHDIR: "true"
+  CCACHE_TEMPDIR: "/dev/shm/ccache-temp"
 
 jobs:
   matrix_prep:
@@ -88,14 +91,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Free Disk Space & Install Dependencies
+      - name: Free Disk Space & Install Fast Tools
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd
 
-      - name: Cache
+      - name: Cache Ccache Data
         if: github.event.inputs.use_ccache != 'false'
         uses: actions/cache@v6.1.0
         with:
@@ -108,8 +111,9 @@ jobs:
       - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
         run: |
-          which ccache || { echo "Error: ccache not found!"; exit 1; }
           mkdir -p "${{ env.CCACHE_DIR }}"
+          mkdir -p /dev/shm/ccache-temp
+
           CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
           mkdir -p "$CCACHE_BIN"
           ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
@@ -121,7 +125,7 @@ jobs:
           ccache -M 5G \
             -o hash_dir=false \
             -o compiler_check=content \
-            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules" \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
             -o depend_mode=true \
             -o run_second_cpp=true \
             -o compression=true \
@@ -129,27 +133,42 @@ jobs:
             -o keep_comments_cpp=true \
             -o "cache_dir=${{ env.CCACHE_DIR }}" \
             -o "base_dir=${{ github.workspace }}" \
+            -o "temporary_dir=/dev/shm/ccache-temp" \
             -o file_clone=false \
             -o hard_link=false \
             -z
 
-      - name: Install GCC
+      - name: Cache GCC Toolchain
+        id: gcc-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: gcc-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+
+      - name: Install GCC Toolchain
         run: |
-          BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
-          ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
-          wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
-          tar -xf gcc.tar.xz
-          echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
-          echo "$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin" >> "$GITHUB_PATH"
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          if [ "${{ steps.gcc-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+            echo "⚡ Cache miss: Downloading GCC ${{ env.GCC_VERSION }} with aria2c..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
+            ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o gcc.tar.xz
+            tar -xf gcc.tar.xz
+            rm -f gcc.tar.xz
+          else
+            echo "✅ GCC Toolchain restored from Action Cache!"
+          fi
+          echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Clone Source
         run: |
-          git clone --depth=1 https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
-          git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
-          git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
-          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
+          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
+          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            git clone --depth=1 --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
           fi
 
       - name: Metadata
@@ -249,6 +268,7 @@ jobs:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
           CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CCACHE_BASEDIR: ${{ github.workspace }}
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             CC="ccache ${{ env.GCC_PATH }}gcc"
@@ -340,14 +360,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Free Disk Space & Install Dependencies
+      - name: Free Disk Space & Install Fast Tools
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd
 
-      - name: Cache
+      - name: Cache Ccache Data
         if: github.event.inputs.use_ccache != 'false'
         uses: actions/cache@v6.1.0
         with:
@@ -360,8 +380,9 @@ jobs:
       - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
         run: |
-          which ccache || { echo "Error: ccache not found!"; exit 1; }
           mkdir -p "${{ env.CCACHE_DIR }}"
+          mkdir -p /dev/shm/ccache-temp
+
           CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
           mkdir -p "$CCACHE_BIN"
           ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
@@ -373,7 +394,7 @@ jobs:
           ccache -M 5G \
             -o hash_dir=false \
             -o compiler_check=content \
-            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules" \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
             -o depend_mode=true \
             -o run_second_cpp=true \
             -o compression=true \
@@ -381,27 +402,42 @@ jobs:
             -o keep_comments_cpp=true \
             -o "cache_dir=${{ env.CCACHE_DIR }}" \
             -o "base_dir=${{ github.workspace }}" \
+            -o "temporary_dir=/dev/shm/ccache-temp" \
             -o file_clone=false \
             -o hard_link=false \
             -z
 
-      - name: Install GCC
+      - name: Cache GCC Toolchain
+        id: gcc-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: gcc-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+
+      - name: Install GCC Toolchain
         run: |
-          BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
-          ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
-          wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
-          tar -xf gcc.tar.xz
-          echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
-          echo "$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin" >> "$GITHUB_PATH"
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          if [ "${{ steps.gcc-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+            echo "⚡ Cache miss: Downloading GCC ${{ env.GCC_VERSION }} with aria2c..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
+            ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o gcc.tar.xz
+            tar -xf gcc.tar.xz
+            rm -f gcc.tar.xz
+          else
+            echo "✅ GCC Toolchain restored from Action Cache!"
+          fi
+          echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Clone Source
         run: |
-          git clone --depth=1 https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
-          git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
-          git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
-          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
+          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
+          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            git clone --depth=1 --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
           fi
 
       - name: Metadata
@@ -494,6 +530,7 @@ jobs:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
           CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CCACHE_BASEDIR: ${{ github.workspace }}
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             CC="ccache ${{ env.GCC_PATH }}gcc"
