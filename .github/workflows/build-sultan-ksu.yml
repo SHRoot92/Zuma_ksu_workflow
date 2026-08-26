@@ -43,6 +43,7 @@ on:
 permissions:
   contents: write
   actions: write
+  workflows: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}
@@ -675,18 +676,13 @@ jobs:
           KSU_BRANCH: ${{ github.event.inputs.ksu_branch || 'master' }}
         run: |
           DATE=$(date +"%y%m%d")
-          if ! git rev-parse "$DATE" >/dev/null 2>&1; then
+          if ! gh release view "$DATE" >/dev/null 2>&1; then
             TAG="$DATE"
           else
-            MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
+            MAX_REV=$(gh release list --limit 50 | awk '{print $1}' | grep -E "^${DATE}-r[0-9]+" | sed "s/${DATE}-r//" | sort -n | tail -n1)
             REV=$(( ${MAX_REV:-0} + 1 ))
             TAG="${DATE}-r${REV}"
           fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
 
           ZIP_FILES=$(find ./all_artifacts -name "*.zip" -type f)
           if [ -z "$ZIP_FILES" ]; then
@@ -711,6 +707,7 @@ jobs:
           fi
 
           gh release create "$TAG" $ZIP_FILES \
+            --target "${{ github.sha }}" \
             $PRERELEASE_FLAG \
             --title "Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER)" \
             --notes "
