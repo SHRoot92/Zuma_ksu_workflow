@@ -104,11 +104,10 @@ jobs:
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             mkdir -p ${{ github.workspace }}/.ccache
             mkdir -p /dev/shm/ccache-temp
-            ccache -M 10G -z
             echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
             echo "USE_CCACHE=1" >> $GITHUB_ENV
             echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
-            echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+            echo "CCACHE_SLOPPINESS=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" >> $GITHUB_ENV
             echo "CCACHE_COMPRESS=true" >> $GITHUB_ENV
             echo "CCACHE_COMPRESSTYPE=zstd" >> $GITHUB_ENV
             echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
@@ -132,6 +131,24 @@ jobs:
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-manual-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-manual-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-
+
+      - name: Setup Ccache Configurations
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          mkdir -p /dev/shm/ccache-temp
+          ccache -M 10G \
+            -o hash_dir=false \
+            -o compiler_check=content \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
+            -o depend_mode=true \
+            -o run_second_cpp=true \
+            -o compression=true \
+            -o compression_level=1 \
+            -o keep_comments_cpp=true \
+            -o temporary_dir=/dev/shm/ccache-temp \
+            -o base_dir="${{ github.workspace }}"
+          ccache -z
 
       - name: Install ARM Toolchain
         run: |
@@ -382,11 +399,10 @@ jobs:
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             mkdir -p ${{ github.workspace }}/.ccache
             mkdir -p /dev/shm/ccache-temp
-            ccache -M 10G -z
             echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
             echo "USE_CCACHE=1" >> $GITHUB_ENV
             echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
-            echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+            echo "CCACHE_SLOPPINESS=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" >> $GITHUB_ENV
             echo "CCACHE_COMPRESS=true" >> $GITHUB_ENV
             echo "CCACHE_COMPRESSTYPE=zstd" >> $GITHUB_ENV
             echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
@@ -410,6 +426,24 @@ jobs:
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-lsm-
             toolchain-${{ runner.os }}-arm-gnu-${{ env.ARM_TOOLCHAIN_VERSION }}-
+
+      - name: Setup Ccache Configurations
+        if: github.event.inputs.use_ccache != 'false'
+        run: |
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          mkdir -p /dev/shm/ccache-temp
+          ccache -M 10G \
+            -o hash_dir=false \
+            -o compiler_check=content \
+            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
+            -o depend_mode=true \
+            -o run_second_cpp=true \
+            -o compression=true \
+            -o compression_level=1 \
+            -o keep_comments_cpp=true \
+            -o temporary_dir=/dev/shm/ccache-temp \
+            -o base_dir="${{ github.workspace }}"
+          ccache -z
 
       - name: Install ARM Toolchain
         run: |
