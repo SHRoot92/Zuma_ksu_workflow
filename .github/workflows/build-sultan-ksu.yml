@@ -55,7 +55,7 @@ env:
   SUSFS_REPO_BRANCH: sultan-shiba-susfs-minimal
   SCRIPTS_REPO: https://github.com/TheSillyOk/sh
   KSU_REPO: backslashxx/KernelSU
-  GCC_VERSION: "14.2.rel1"
+  ARM_TOOLCHAIN_VERSION: "14.2.rel1"
   CCACHE_DIR: "${{ github.workspace }}/.ccache"
   CCACHE_COMPILERCHECK: "content"
   CCACHE_NOHASHDIR: "true"
@@ -155,27 +155,27 @@ jobs:
             -o hard_link=false \
             -z
 
-      - name: Cache GCC Toolchain
-        id: gcc-cache
+      - name: Cache ARM Toolchain
+        id: arm-toolchain-cache
         uses: actions/cache@v6.1.0
         with:
-          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: gcc-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: arm-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
 
-      - name: Install GCC Toolchain
+      - name: Install ARM Toolchain
         run: |
-          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu"
-          if [ "${{ steps.gcc-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
-            echo "⚡ Cache miss: Downloading GCC ${{ env.GCC_VERSION }} with aria2c..."
-            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
-            ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
-            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o gcc.tar.xz
-            tar -xf gcc.tar.xz
-            rm -f gcc.tar.xz
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          if [ "${{ steps.arm-toolchain-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+            echo "⚡ Cache miss: Downloading ARM GNU Toolchain ${{ env.ARM_TOOLCHAIN_VERSION }} with aria2c..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
+            ARCHIVE="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o arm-toolchain.tar.xz
+            tar -xf arm-toolchain.tar.xz
+            rm -f arm-toolchain.tar.xz
           else
-            echo "✅ GCC Toolchain restored from Action Cache!"
+            echo "✅ ARM Toolchain restored from Action Cache!"
           fi
-          echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "TOOLCHAIN_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Cache Sultan Kernel Source
@@ -208,8 +208,8 @@ jobs:
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
-          GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
-          GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          TOOLCHAIN_VER_FULL=$(${TOOLCHAIN_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          TOOLCHAIN_VER=$(echo "$TOOLCHAIN_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
@@ -225,7 +225,7 @@ jobs:
 
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
-          echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
+          echo "toolchain_version=$TOOLCHAIN_VER" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
@@ -235,7 +235,7 @@ jobs:
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: manual"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
-          echo "⚙️ GCC Version: $GCC_VER"
+          echo "⚙️ Toolchain: ARM GNU Toolchain ($TOOLCHAIN_VER)"
           echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
@@ -273,8 +273,8 @@ jobs:
       - name: Generate Defconfig
         working-directory: sultan
         env:
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
+          CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
 
@@ -288,8 +288,8 @@ jobs:
       - name: Finalize Defconfig
         working-directory: sultan
         env:
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
+          CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
 
@@ -298,13 +298,13 @@ jobs:
         env:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
           CCACHE_BASEDIR: ${{ github.workspace }}
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
-            CC="ccache ${{ env.GCC_PATH }}gcc"
+            CC="ccache ${{ env.TOOLCHAIN_PATH }}gcc"
           else
-            CC="${{ env.GCC_PATH }}gcc"
+            CC="${{ env.TOOLCHAIN_PATH }}gcc"
           fi
           echo "Compiling kernel with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
@@ -445,27 +445,27 @@ jobs:
             -o hard_link=false \
             -z
 
-      - name: Cache GCC Toolchain
-        id: gcc-cache
+      - name: Cache ARM Toolchain
+        id: arm-toolchain-cache
         uses: actions/cache@v6.1.0
         with:
-          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: gcc-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu
+          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: arm-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
 
-      - name: Install GCC Toolchain
+      - name: Install ARM Toolchain
         run: |
-          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu"
-          if [ "${{ steps.gcc-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
-            echo "⚡ Cache miss: Downloading GCC ${{ env.GCC_VERSION }} with aria2c..."
-            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
-            ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
-            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o gcc.tar.xz
-            tar -xf gcc.tar.xz
-            rm -f gcc.tar.xz
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          if [ "${{ steps.arm-toolchain-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+            echo "⚡ Cache miss: Downloading ARM GNU Toolchain ${{ env.ARM_TOOLCHAIN_VERSION }} with aria2c..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
+            ARCHIVE="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE}" -o arm-toolchain.tar.xz
+            tar -xf arm-toolchain.tar.xz
+            rm -f arm-toolchain.tar.xz
           else
-            echo "✅ GCC Toolchain restored from Action Cache!"
+            echo "✅ ARM Toolchain restored from Action Cache!"
           fi
-          echo "GCC_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "TOOLCHAIN_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Cache Sultan Kernel Source
@@ -498,8 +498,8 @@ jobs:
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
-          GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
-          GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          TOOLCHAIN_VER_FULL=$(${TOOLCHAIN_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          TOOLCHAIN_VER=$(echo "$TOOLCHAIN_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
@@ -515,7 +515,7 @@ jobs:
 
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
-          echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
+          echo "toolchain_version=$TOOLCHAIN_VER" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
@@ -525,7 +525,7 @@ jobs:
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: lsm (Hookless/BL)"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
-          echo "⚙️ GCC Version: $GCC_VER"
+          echo "⚙️ Toolchain: ARM GNU Toolchain ($TOOLCHAIN_VER)"
           echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
@@ -556,8 +556,8 @@ jobs:
       - name: Generate Defconfig
         working-directory: sultan
         env:
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
+          CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
 
@@ -571,8 +571,8 @@ jobs:
       - name: Finalize Defconfig
         working-directory: sultan
         env:
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
-          CC: ${{ env.GCC_PATH }}gcc
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
+          CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
 
@@ -581,13 +581,13 @@ jobs:
         env:
           KBUILD_BUILD_USER: build-user
           KBUILD_BUILD_HOST: build-host
-          CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
           CCACHE_BASEDIR: ${{ github.workspace }}
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
-            CC="ccache ${{ env.GCC_PATH }}gcc"
+            CC="ccache ${{ env.TOOLCHAIN_PATH }}gcc"
           else
-            CC="${{ env.GCC_PATH }}gcc"
+            CC="${{ env.TOOLCHAIN_PATH }}gcc"
           fi
           echo "Compiling kernel with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
@@ -724,7 +724,7 @@ jobs:
           | **Device** | Google Pixel 7 / Pro (gs201 - Cheetah/Panther) |
           | **Kernel Base** | Sultan (Linux 6.1) |
           | **KernelSU Branch** | \`$KSU_BRANCH\` |
-          | **Compiler** | ARM GNU GCC (14.2.rel1) |
+          | **Toolchain** | ARM GNU Toolchain (14.2.rel1) |
 
           ### 📦 Variant Breakdown
           - **manual-SUSFS**: Manual Security Hooks + SuSFS (Recommended for maximum stealth)
