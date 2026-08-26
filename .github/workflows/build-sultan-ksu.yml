@@ -1,4 +1,4 @@
-name: Build Sultan + KSU (Matrix)
+﻿name: Build Sultan + KSU (Matrix)
 
 on:
   workflow_dispatch:
@@ -105,10 +105,19 @@ jobs:
             ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
             ccache-gs201-manual-${{ matrix.enable_susfs }}-
 
-      - name: Setup Ccache Configurations
+      - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
         run: |
+          which ccache || { echo "Error: ccache not found!"; exit 1; }
           mkdir -p "${{ env.CCACHE_DIR }}"
+          CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
+          mkdir -p "$CCACHE_BIN"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-g++"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/gcc"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/g++"
+          echo "$CCACHE_BIN" >> "$GITHUB_PATH"
+
           ccache -M 5G \
             -o hash_dir=false \
             -o compiler_check=content \
@@ -131,6 +140,7 @@ jobs:
           wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
           tar -xf gcc.tar.xz
           echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin" >> "$GITHUB_PATH"
 
       - name: Clone Source
         run: |
@@ -245,7 +255,7 @@ jobs:
           else
             CC="${{ env.GCC_PATH }}gcc"
           fi
-          echo "Compiling with CC: $CC"
+          echo "Compiling kernel with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
 
       - name: Ccache Performance Stats
@@ -347,10 +357,19 @@ jobs:
             ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
             ccache-gs201-lsm-${{ matrix.enable_susfs }}-
 
-      - name: Setup Ccache Configurations
+      - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
         run: |
+          which ccache || { echo "Error: ccache not found!"; exit 1; }
           mkdir -p "${{ env.CCACHE_DIR }}"
+          CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
+          mkdir -p "$CCACHE_BIN"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-g++"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/gcc"
+          ln -sf "$(which ccache)" "$CCACHE_BIN/g++"
+          echo "$CCACHE_BIN" >> "$GITHUB_PATH"
+
           ccache -M 5G \
             -o hash_dir=false \
             -o compiler_check=content \
@@ -373,6 +392,7 @@ jobs:
           wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
           tar -xf gcc.tar.xz
           echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin" >> "$GITHUB_PATH"
 
       - name: Clone Source
         run: |
@@ -480,7 +500,7 @@ jobs:
           else
             CC="${{ env.GCC_PATH }}gcc"
           fi
-          echo "Compiling with CC: $CC"
+          echo "Compiling kernel with CC: $CC"
           make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
 
       - name: Ccache Performance Stats
