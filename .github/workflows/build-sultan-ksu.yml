@@ -678,7 +678,10 @@ jobs:
           fi
 
           RELEASE_TITLE="Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER)"
-          RELEASE_NOTES="## 📱 Sultan gs201 Kernel — $TITLE_PREFIX $TAG
+          BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+          cat > release_body.md << EOF
+## 📱 Sultan gs201 Kernel — $TITLE_PREFIX $TAG
 
 ### 🚀 Build Information
 | Component | Details |
@@ -687,7 +690,7 @@ jobs:
 | **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |
 | **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |
 | **Compiler** | $TOOLCHAIN_DISPLAY |
-| **Build Date** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |
+| **Build Date** | $BUILD_TIME |
 
 ### 📦 Variant Breakdown
 | Package | Security Hook Mode | SuSFS Status | Stealth Level |
@@ -703,7 +706,7 @@ $DEBUG_NOTE
 - **TCP Congestion Control:** BBR v1 + FQ default
 - **Advanced Policy Routing:** Table 1066 support & 64k IPSet for seamless split-tunneling
 - **Fixes & Compatibility:** ADDRTYPE match, Google VPN (XFRM), TTL 64 share
-"
+EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "⚡ Release $TAG already exists for today. Overwriting assets and updating release..."
@@ -712,12 +715,12 @@ $DEBUG_NOTE
               --target "${{ github.sha }}" \
               $PRERELEASE_FLAG \
               --title "$RELEASE_TITLE" \
-              --notes "$RELEASE_NOTES"
+              --notes-file release_body.md
           else
             echo "🚀 Creating new release for $TAG..."
             gh release create "$TAG" $ZIP_FILES \
               --target "${{ github.sha }}" \
               $PRERELEASE_FLAG \
               --title "$RELEASE_TITLE" \
-              --notes "$RELEASE_NOTES"
+              --notes-file release_body.md
           fi
