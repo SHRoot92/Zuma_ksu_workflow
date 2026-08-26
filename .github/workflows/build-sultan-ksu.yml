@@ -100,10 +100,7 @@ jobs:
 
       - name: Set up build environment and ccache
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd build-essential curl git
+          sudo apt-get install -y --no-install-recommends ccache aria2 libdw-dev 2>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ccache aria2 libdw-dev)
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             mkdir -p ${{ github.workspace }}/.ccache
             mkdir -p /dev/shm/ccache-temp
@@ -117,6 +114,7 @@ jobs:
             echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
             echo "CCACHE_BASEDIR=${{ github.workspace }}" >> $GITHUB_ENV
             echo "CCACHE_NOHASHDIR=true" >> $GITHUB_ENV
+            echo "CCACHE_TEMPDIR=/dev/shm/ccache-temp" >> $GITHUB_ENV
           else
             echo "USE_CCACHE=0" >> $GITHUB_ENV
           fi
@@ -153,13 +151,14 @@ jobs:
 
       - name: Clone Source
         run: |
-          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
-          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
-          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
-          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
+          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan &
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3 &
+          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
+          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh &
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu &
           fi
+          wait
 
       - name: Metadata
         id: meta
@@ -378,10 +377,7 @@ jobs:
 
       - name: Set up build environment and ccache
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd build-essential curl git
+          sudo apt-get install -y --no-install-recommends ccache aria2 libdw-dev 2>/dev/null || (sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ccache aria2 libdw-dev)
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             mkdir -p ${{ github.workspace }}/.ccache
             mkdir -p /dev/shm/ccache-temp
@@ -395,6 +391,7 @@ jobs:
             echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
             echo "CCACHE_BASEDIR=${{ github.workspace }}" >> $GITHUB_ENV
             echo "CCACHE_NOHASHDIR=true" >> $GITHUB_ENV
+            echo "CCACHE_TEMPDIR=/dev/shm/ccache-temp" >> $GITHUB_ENV
           else
             echo "USE_CCACHE=0" >> $GITHUB_ENV
           fi
@@ -431,13 +428,14 @@ jobs:
 
       - name: Clone Source
         run: |
-          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
-          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
-          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches
-          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh
+          git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan &
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3 &
+          git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
+          git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh &
           if [ "${{ matrix.enable_susfs }}" = "true" ]; then
-            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+            git clone --depth=1 --single-branch --no-tags --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu &
           fi
+          wait
 
       - name: Metadata
         id: meta
