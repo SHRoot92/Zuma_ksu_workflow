@@ -654,11 +654,6 @@ jobs:
         run: |
           DATE=$(date +"%y%m%d")
           TAG="$DATE"
-          REV=0
-          while gh release view "$TAG" >/dev/null 2>&1 || git rev-parse "$TAG" >/dev/null 2>&1; do
-            REV=$(( REV + 1 ))
-            TAG="${DATE}-r${REV}"
-          done
 
           ZIP_FILES=$(find ./all_artifacts -name "*.zip" -type f)
           if [ -z "$ZIP_FILES" ]; then
@@ -682,34 +677,47 @@ jobs:
             DEBUG_NOTE="> 🛠️ **Debug Symbols**: Includes \`vmlinux\` and \`System.map\` debug symbol archives for kernel debugging."
           fi
 
-          gh release create "$TAG" $ZIP_FILES \
-            --target "${{ github.sha }}" \
-            $PRERELEASE_FLAG \
-            --title "Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER)" \
-            --notes "
-          ## 📱 Sultan gs201 Kernel — $TITLE_PREFIX $TAG
+          RELEASE_TITLE="Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER)"
+          RELEASE_NOTES="## 📱 Sultan gs201 Kernel — $TITLE_PREFIX $TAG
 
-          ### 🚀 Build Information
-          | Component | Details |
-          | :--- | :--- |
-          | **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |
-          | **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |
-          | **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |
-          | **Compiler** | $TOOLCHAIN_DISPLAY |
-          | **Build Date** | $DATE |
+### 🚀 Build Information
+| Component | Details |
+| :--- | :--- |
+| **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |
+| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |
+| **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |
+| **Compiler** | $TOOLCHAIN_DISPLAY |
+| **Build Date** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |
 
-          ### 📦 Variant Breakdown
-          | Package | Security Hook Mode | SuSFS Status | Stealth Level |
-          | :--- | :--- | :--- | :--- |
-          | \`*-manual-SUSFS-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled | 🛡️ **Maximum Stealth** (Recommended) |
-          | \`*-manual-*.zip\` | Manual Security Hooks (Inline) | ❌ Clean KSU | Standard Root |
-          | \`*-lsm-SUSFS-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled | Hookless Stealth |
-          | \`*-lsm-*.zip\` | LSM Security Hooks (BL Hookless) | ❌ Clean KSU | Standard Hookless Root |
+### 📦 Variant Breakdown
+| Package | Security Hook Mode | SuSFS Status | Stealth Level |
+| :--- | :--- | :--- | :--- |
+| \`*-manual-SUSFS-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled | 🛡️ **Maximum Stealth** (Recommended) |
+| \`*-manual-*.zip\` | Manual Security Hooks (Inline) | ❌ Clean KSU | Standard Root |
+| \`*-lsm-SUSFS-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled | Hookless Stealth |
+| \`*-lsm-*.zip\` | LSM Security Hooks (BL Hookless) | ❌ Clean KSU | Standard Hookless Root |
 
-          $DEBUG_NOTE
+$DEBUG_NOTE
 
-          ### ⚡ Networking & Performance Tweaks
-          - **TCP Congestion Control:** BBR v1 + FQ default
-          - **Advanced Policy Routing:** Table 1066 support & 64k IPSet for seamless split-tunneling
-          - **Fixes & Compatibility:** ADDRTYPE match, Google VPN (XFRM), TTL 64 share
-          "
+### ⚡ Networking & Performance Tweaks
+- **TCP Congestion Control:** BBR v1 + FQ default
+- **Advanced Policy Routing:** Table 1066 support & 64k IPSet for seamless split-tunneling
+- **Fixes & Compatibility:** ADDRTYPE match, Google VPN (XFRM), TTL 64 share
+"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "⚡ Release $TAG already exists for today. Overwriting assets and updating release..."
+            gh release upload "$TAG" $ZIP_FILES --clobber
+            gh release edit "$TAG" \
+              --target "${{ github.sha }}" \
+              $PRERELEASE_FLAG \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          else
+            echo "🚀 Creating new release for $TAG..."
+            gh release create "$TAG" $ZIP_FILES \
+              --target "${{ github.sha }}" \
+              $PRERELEASE_FLAG \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          fi
