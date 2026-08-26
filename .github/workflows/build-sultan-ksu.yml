@@ -98,66 +98,41 @@ jobs:
           git config --global http.version HTTP/2
           git config --global core.compression 0
 
-      - name: Free Disk Space & Install Fast Tools
+      - name: Set up build environment and ccache
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd build-essential curl git
+          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
+            mkdir -p ${{ github.workspace }}/.ccache
+            mkdir -p /dev/shm/ccache-temp
+            ccache -M 10G -z
+            echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
+            echo "USE_CCACHE=1" >> $GITHUB_ENV
+            echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
+            echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+          else
+            echo "USE_CCACHE=0" >> $GITHUB_ENV
+          fi
 
-      - name: Cache Ccache Data
-        if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v6.1.0
+      - name: Restore Cache
+        id: cache-restore
+        uses: actions/cache/restore@v6
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/.ccache
+            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ matrix.enable_susfs }}-${{ github.run_id }}
           restore-keys: |
-            ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
-            ccache-gs201-manual-${{ matrix.enable_susfs }}-
-            ccache-gs201-${{ matrix.enable_susfs }}-
-            ccache-gs201-
-
-      - name: Setup Ccache Configurations & Wrappers
-        if: github.event.inputs.use_ccache != 'false'
-        run: |
-          mkdir -p "${{ env.CCACHE_DIR }}"
-          mkdir -p /dev/shm/ccache-temp
-
-          CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
-          mkdir -p "$CCACHE_BIN"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-g++"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/gcc"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/g++"
-          echo "$CCACHE_BIN" >> "$GITHUB_PATH"
-
-          ccache -M 5G \
-            -o hash_dir=false \
-            -o compiler_check=content \
-            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
-            -o depend_mode=true \
-            -o run_second_cpp=true \
-            -o compression=true \
-            -o compression_level=1 \
-            -o keep_comments_cpp=true \
-            -o "cache_dir=${{ env.CCACHE_DIR }}" \
-            -o "base_dir=${{ github.workspace }}" \
-            -o "temporary_dir=/dev/shm/ccache-temp" \
-            -o file_clone=false \
-            -o hard_link=false \
-            -z
-
-      - name: Cache ARM Toolchain
-        id: arm-toolchain-cache
-        uses: actions/cache@v6.1.0
-        with:
-          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: arm-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+            toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ matrix.enable_susfs }}-
+            toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-manual-
+            toolchain-${{ runner.os }}-gcc-
 
       - name: Install ARM Toolchain
         run: |
           TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
-          if [ "${{ steps.arm-toolchain-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+          if [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
             echo "⚡ Cache miss: Downloading ARM GNU Toolchain ${{ env.ARM_TOOLCHAIN_VERSION }} with aria2c..."
             BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
             ARCHIVE="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
@@ -169,6 +144,7 @@ jobs:
           fi
           echo "TOOLCHAIN_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
+          echo "GCC_VER=$($TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-gcc --version | head -n1 | awk '{print $NF}')" >> "$GITHUB_ENV"
 
       - name: Clone Source
         run: |
@@ -365,6 +341,15 @@ jobs:
           name: kernel-manual-${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
 
+      - name: Save Cache
+        if: always() && github.event.inputs.use_ccache != 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ github.workspace }}/.ccache
+            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-manual-${{ matrix.enable_susfs }}-${{ github.run_id }}
+
   build_lsm:
     name: LSM Hook (SUSFS=${{ matrix.enable_susfs }})
     if: github.event.inputs.hook_mode == 'all' || github.event.inputs.hook_mode == 'lsm' || github.event_name != 'workflow_dispatch'
@@ -386,66 +371,41 @@ jobs:
           git config --global http.version HTTP/2
           git config --global core.compression 0
 
-      - name: Free Disk Space & Install Fast Tools
+      - name: Set up build environment and ccache
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true &
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd
+            binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip zstd build-essential curl git
+          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
+            mkdir -p ${{ github.workspace }}/.ccache
+            mkdir -p /dev/shm/ccache-temp
+            ccache -M 10G -z
+            echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
+            echo "USE_CCACHE=1" >> $GITHUB_ENV
+            echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
+            echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+          else
+            echo "USE_CCACHE=0" >> $GITHUB_ENV
+          fi
 
-      - name: Cache Ccache Data
-        if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v6.1.0
+      - name: Restore Cache
+        id: cache-restore
+        uses: actions/cache/restore@v6
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/.ccache
+            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ matrix.enable_susfs }}-${{ github.run_id }}
           restore-keys: |
-            ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
-            ccache-gs201-lsm-${{ matrix.enable_susfs }}-
-            ccache-gs201-${{ matrix.enable_susfs }}-
-            ccache-gs201-
-
-      - name: Setup Ccache Configurations & Wrappers
-        if: github.event.inputs.use_ccache != 'false'
-        run: |
-          mkdir -p "${{ env.CCACHE_DIR }}"
-          mkdir -p /dev/shm/ccache-temp
-
-          CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
-          mkdir -p "$CCACHE_BIN"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/aarch64-none-linux-gnu-g++"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/gcc"
-          ln -sf "$(which ccache)" "$CCACHE_BIN/g++"
-          echo "$CCACHE_BIN" >> "$GITHUB_PATH"
-
-          ccache -M 5G \
-            -o hash_dir=false \
-            -o compiler_check=content \
-            -o "sloppiness=file_macro,time_macros,include_file_mtime,include_file_ctime,pch_defines,modules,system_headers" \
-            -o depend_mode=true \
-            -o run_second_cpp=true \
-            -o compression=true \
-            -o compression_level=1 \
-            -o keep_comments_cpp=true \
-            -o "cache_dir=${{ env.CCACHE_DIR }}" \
-            -o "base_dir=${{ github.workspace }}" \
-            -o "temporary_dir=/dev/shm/ccache-temp" \
-            -o file_clone=false \
-            -o hard_link=false \
-            -z
-
-      - name: Cache ARM Toolchain
-        id: arm-toolchain-cache
-        uses: actions/cache@v6.1.0
-        with:
-          path: ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
-          key: arm-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+            toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ matrix.enable_susfs }}-
+            toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-
+            toolchain-${{ runner.os }}-gcc-
 
       - name: Install ARM Toolchain
         run: |
           TOOLCHAIN_DIR="$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
-          if [ "${{ steps.arm-toolchain-cache.outputs.cache-hit }}" != "true" ] || [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
+          if [ ! -d "$TOOLCHAIN_DIR/bin" ]; then
             echo "⚡ Cache miss: Downloading ARM GNU Toolchain ${{ env.ARM_TOOLCHAIN_VERSION }} with aria2c..."
             BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
             ARCHIVE="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
@@ -457,6 +417,7 @@ jobs:
           fi
           echo "TOOLCHAIN_PATH=$TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
+          echo "GCC_VER=$($TOOLCHAIN_DIR/bin/aarch64-none-linux-gnu-gcc --version | head -n1 | awk '{print $NF}')" >> "$GITHUB_ENV"
 
       - name: Clone Source
         run: |
@@ -645,6 +606,15 @@ jobs:
         with:
           name: kernel-lsm-${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
+
+      - name: Save Cache
+        if: always() && github.event.inputs.use_ccache != 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ github.workspace }}/.ccache
+            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
+          key: toolchain-${{ runner.os }}-gcc-${{ github.event.inputs.ksu_branch || 'master' }}-lsm-${{ matrix.enable_susfs }}-${{ github.run_id }}
 
   release:
     name: Publish Release
