@@ -645,13 +645,12 @@ jobs:
           KSU_BRANCH: ${{ github.event.inputs.ksu_branch || 'master' }}
         run: |
           DATE=$(date +"%y%m%d")
-          if ! gh release view "$DATE" >/dev/null 2>&1; then
-            TAG="$DATE"
-          else
-            MAX_REV=$(gh release list --limit 50 | awk '{print $1}' | grep -E "^${DATE}-r[0-9]+" | sed "s/${DATE}-r//" | sort -n | tail -n1)
-            REV=$(( ${MAX_REV:-0} + 1 ))
+          TAG="$DATE"
+          REV=0
+          while gh release view "$TAG" >/dev/null 2>&1 || git rev-parse "$TAG" >/dev/null 2>&1; do
+            REV=$(( REV + 1 ))
             TAG="${DATE}-r${REV}"
-          fi
+          done
 
           ZIP_FILES=$(find ./all_artifacts -name "*.zip" -type f)
           if [ -z "$ZIP_FILES" ]; then
