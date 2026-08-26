@@ -228,9 +228,6 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
           patch -p1 < ../kernel_patches/sultan/0001-modify-noinline.patch
 
-          # Test optimization: Enable GNU Make Jobserver inheritance for parallel LTO code generation
-          sed -i 's/$(call if_changed,link-vmlinux)/+$(call if_changed,link-vmlinux)/g' Makefile 2>/dev/null || true
-
       - name: Apply Manual Hook Patches
         working-directory: sultan
         run: |
@@ -525,9 +522,6 @@ jobs:
           patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
           patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
           patch -p1 < ../kernel_patches/sultan/0001-modify-noinline.patch
-
-          # Test optimization: Enable GNU Make Jobserver inheritance for parallel LTO code generation
-          sed -i 's/$(call if_changed,link-vmlinux)/+$(call if_changed,link-vmlinux)/g' Makefile 2>/dev/null || true
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
