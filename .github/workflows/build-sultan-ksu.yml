@@ -1,4 +1,4 @@
-﻿name: Build Sultan + KSU (Matrix)
+name: Build Sultan + KSU (Matrix)
 
 on:
   workflow_dispatch:
@@ -95,9 +95,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
 
-      - name: Restore Ccache
+      - name: Cache
         if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
@@ -337,9 +337,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             binutils python-is-python3 libssl-dev libelf-dev libdw-dev bison flex bc aria2 ccache zip
 
-      - name: Restore Ccache
+      - name: Cache
         if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-${{ github.sha }}
