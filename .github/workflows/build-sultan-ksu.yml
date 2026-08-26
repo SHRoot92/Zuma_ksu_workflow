@@ -285,9 +285,8 @@ jobs:
           else
             CC="${{ env.TOOLCHAIN_PATH }}gcc"
           fi
-          export MAKEFLAGS="-j$(nproc --all)"
-          echo "Compiling kernel with CC: $CC (Parallel LTO enabled)"
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" KCFLAGS="-flto=auto" KBUILD_LDFLAGS="-flto=auto" -j"$(nproc --all)"
+          echo "Compiling kernel with CC: $CC"
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
 
       - name: Ccache Performance Stats
         if: github.event.inputs.use_ccache != 'false'
@@ -574,9 +573,8 @@ jobs:
           else
             CC="${{ env.TOOLCHAIN_PATH }}gcc"
           fi
-          export MAKEFLAGS="-j$(nproc --all)"
-          echo "Compiling kernel with CC: $CC (Parallel LTO enabled)"
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" KCFLAGS="-flto=auto" KBUILD_LDFLAGS="-flto=auto" -j"$(nproc --all)"
+          echo "Compiling kernel with CC: $CC"
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
 
       - name: Ccache Performance Stats
         if: github.event.inputs.use_ccache != 'false'
