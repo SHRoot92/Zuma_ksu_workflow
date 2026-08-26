@@ -330,10 +330,10 @@ jobs:
 
           TOOLCHAIN_DISPLAY="${{ steps.meta.outputs.toolchain_display }}"
           S_TAG="${{ steps.meta.outputs.s_tag }}"
-          echo "KERNEL_VER=${KERNEL_VER}" > ./output_artifacts/build_metadata.env
-          echo "KSU_VER=${K_VER}" >> ./output_artifacts/build_metadata.env
-          echo "S_TAG=${S_TAG}" >> ./output_artifacts/build_metadata.env
-          echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> ./output_artifacts/build_metadata.env
+          echo "KERNEL_VER='${KERNEL_VER}'" > ./output_artifacts/build_metadata.env
+          echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
+          echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
+          echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -611,10 +611,10 @@ jobs:
 
           TOOLCHAIN_DISPLAY="${{ steps.meta.outputs.toolchain_display }}"
           S_TAG="${{ steps.meta.outputs.s_tag }}"
-          echo "KERNEL_VER=${KERNEL_VER}" > ./output_artifacts/build_metadata.env
-          echo "KSU_VER=${K_VER}" >> ./output_artifacts/build_metadata.env
-          echo "S_TAG=${S_TAG}" >> ./output_artifacts/build_metadata.env
-          echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> ./output_artifacts/build_metadata.env
+          echo "KERNEL_VER='${KERNEL_VER}'" > ./output_artifacts/build_metadata.env
+          echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
+          echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
+          echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -690,7 +690,7 @@ jobs:
           fi
 
           if [ -f "./all_artifacts/build_metadata.env" ]; then
-            source ./all_artifacts/build_metadata.env
+            eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
           fi
           TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
           KERNEL_VER="${KERNEL_VER:-6.1}"
