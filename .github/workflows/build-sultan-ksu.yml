@@ -97,7 +97,7 @@ jobs:
       matrix:
         enable_susfs: ${{ fromJson(needs.matrix_prep.outputs.susfs_matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -372,7 +372,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: kernel-manual-${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
@@ -387,7 +387,7 @@ jobs:
       matrix:
         enable_susfs: ${{ fromJson(needs.matrix_prep.outputs.susfs_matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -655,7 +655,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: kernel-lsm-${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
@@ -668,11 +668,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           path: ./all_artifacts
           pattern: kernel-*

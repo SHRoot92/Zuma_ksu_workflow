@@ -1,14 +1,14 @@
-name: Apply & Regenerate KSU Security Patch
+﻿name: Apply & Regenerate KSU Security Patch
 
 on:
   workflow_dispatch:
     inputs:
       target_branch:
-        description: '目标内核分支 (例如: 16.0.0-sultan)'
+        description: '鐩爣鍐呮牳鍒嗘敮 (渚嬪: 16.0.0-sultan)'
         required: true
         default: '16.0.0-sultan'
       original_patch_url:
-        description: '原始补丁的URL'
+        description: '鍘熷琛ヤ竵鐨刄RL'
         required: false
         default: 'https://raw.githubusercontent.com/yapixel/cheetah_kernel_build/main/.github/patches/6.12.manual-security-hooks-v2.0.patch'
 
@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout target kernel repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           repository: kerneltoast/android_kernel_google_tensynos
           ref: ${{ github.event.inputs.target_branch }}
@@ -26,9 +26,9 @@ jobs:
 
       - name: Download original patch
         run: |
-          echo "下载原始补丁..."
+          echo "涓嬭浇鍘熷琛ヤ竵..."
           curl -L -o original.patch ${{ github.event.inputs.original_patch_url }}
-          echo "原始补丁内容预览:"
+          echo "鍘熷琛ヤ竵鍐呭棰勮:"
           head -n 30 original.patch
 
       - name: Prepare kernel source
@@ -37,19 +37,19 @@ jobs:
           pwd
           ls -la security/
           cp security/security.c security/security.c.orig
-          echo "✅ 备份文件已创建: security/security.c.orig"
+          echo "鉁?澶囦唤鏂囦欢宸插垱寤? security/security.c.orig"
           ls -la security/security.c.orig
 
       - name: Try to apply original patch
         working-directory: kernel
         run: |
-          echo "尝试应用原始补丁..."
+          echo "灏濊瘯搴旂敤鍘熷琛ヤ竵..."
           if git apply --check --whitespace=fix ../original.patch 2> apply_error.log; then
-            echo "✅ 原始补丁可以干净应用！"
+            echo "鉁?鍘熷琛ヤ竵鍙互骞插噣搴旂敤锛?
             git apply --whitespace=fix ../original.patch
             echo "NEED_REGENERATE=false" >> $GITHUB_ENV
           else
-            echo "⚠️ 原始补丁无法干净应用，将重新生成。"
+            echo "鈿狅笍 鍘熷琛ヤ竵鏃犳硶骞插噣搴旂敤锛屽皢閲嶆柊鐢熸垚銆?
             cat apply_error.log
             cp security/security.c.orig security/security.c
             echo "NEED_REGENERATE=true" >> $GITHUB_ENV
@@ -59,7 +59,7 @@ jobs:
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
-          echo "基于当前内核源码重新生成 KSU 补丁..."
+          echo "鍩轰簬褰撳墠鍐呮牳婧愮爜閲嶆柊鐢熸垚 KSU 琛ヤ竵..."
           
           python3 << 'PYTHON_SCRIPT'
           import re
@@ -67,7 +67,7 @@ jobs:
           import os
           
           if not os.path.exists('security/security.c'):
-              print("❌ security/security.c 不存在！")
+              print("鉂?security/security.c 涓嶅瓨鍦紒")
               sys.exit(1)
           
           with open('security/security.c', 'r') as f:
@@ -89,7 +89,7 @@ jobs:
               ksu_func = func_name.replace('security_', 'ksu_')
               
               if ksu_func in modified_code:
-                  print(f"⏭️  {func_name}: KSU hook 已存在，跳过。")
+                  print(f"鈴笍  {func_name}: KSU hook 宸插瓨鍦紝璺宠繃銆?)
                   continue
               
               pattern = rf'^(.*?\bint\s+(?:__maybe_unused\s+)?{func_name}\s*\([^)]*\)\s*\{{)'
@@ -97,7 +97,7 @@ jobs:
               
               if not match:
                   not_found.append(func_name)
-                  print(f"❌ {func_name}: 在当前内核中未找到函数定义。")
+                  print(f"鉂?{func_name}: 鍦ㄥ綋鍓嶅唴鏍镐腑鏈壘鍒板嚱鏁板畾涔夈€?)
                   continue
               
               func_start = match.end()
@@ -108,7 +108,7 @@ jobs:
               insert_code = f'\n#ifdef CONFIG_KSU\n\t{hook_call}\n#endif\n'
               modified_code = modified_code[:pos] + insert_code + modified_code[pos:]
               inserted_count += 1
-              print(f"✅ {func_name}: 已插入 KSU hook。")
+              print(f"鉁?{func_name}: 宸叉彃鍏?KSU hook銆?)
           
           if inserted_count > 0 and 'extern int ksu_bprm_check' not in modified_code:
               ksu_decls = '''
@@ -125,19 +125,19 @@ jobs:
               if include_matches:
                   last_include_end = include_matches[-1].end()
                   modified_code = modified_code[:last_include_end] + '\n' + ksu_decls + modified_code[last_include_end:]
-                  print("✅ 已添加 KSU 外部声明。")
+                  print("鉁?宸叉坊鍔?KSU 澶栭儴澹版槑銆?)
               else:
                   modified_code = ksu_decls + modified_code
-                  print("✅ 已在文件开头添加 KSU 外部声明。")
+                  print("鉁?宸插湪鏂囦欢寮€澶存坊鍔?KSU 澶栭儴澹版槑銆?)
           
           if inserted_count > 0:
               with open('security/security.c', 'w') as f:
                   f.write(modified_code)
-              print(f"\n🎉 成功重新生成补丁！共插入 {inserted_count} 个 KSU hook。")
+              print(f"\n馃帀 鎴愬姛閲嶆柊鐢熸垚琛ヤ竵锛佸叡鎻掑叆 {inserted_count} 涓?KSU hook銆?)
               if not_found:
-                  print(f"⚠️ 以下函数未找到: {', '.join(not_found)}")
+                  print(f"鈿狅笍 浠ヤ笅鍑芥暟鏈壘鍒? {', '.join(not_found)}")
           else:
-              print("\n⚠️ 没有插入任何新的 KSU hook。")
+              print("\n鈿狅笍 娌℃湁鎻掑叆浠讳綍鏂扮殑 KSU hook銆?)
               sys.exit(1)
           PYTHON_SCRIPT
 
@@ -145,15 +145,15 @@ jobs:
         if: env.NEED_REGENERATE == 'true'
         working-directory: kernel
         run: |
-          echo "生成补丁文件..."
+          echo "鐢熸垚琛ヤ竵鏂囦欢..."
           git diff -U3 security/security.c > ../regenerated-security-hooks.patch
           sed -i 's/[[:space:]]*$//' ../regenerated-security-hooks.patch
-          echo "✅ 补丁已生成: regenerated-security-hooks.patch"
-          echo "补丁大小: $(wc -l < ../regenerated-security-hooks.patch) 行"
+          echo "鉁?琛ヤ竵宸茬敓鎴? regenerated-security-hooks.patch"
+          echo "琛ヤ竵澶у皬: $(wc -l < ../regenerated-security-hooks.patch) 琛?
           head -n 10 ../regenerated-security-hooks.patch
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ksu-patches-and-source
           path: |
@@ -165,16 +165,16 @@ jobs:
 
       - name: Workflow Summary
         run: |
-          echo "## ✅ 工作流执行完成" >> $GITHUB_STEP_SUMMARY
+          echo "## 鉁?宸ヤ綔娴佹墽琛屽畬鎴? >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 生成的文件：" >> $GITHUB_STEP_SUMMARY
-          echo "- **original.patch**: 原始补丁" >> $GITHUB_STEP_SUMMARY
-          echo "- **regenerated-security-hooks.patch**: 重新生成的补丁" >> $GITHUB_STEP_SUMMARY
-          echo "- **security.c**: 最终修改后的文件" >> $GITHUB_STEP_SUMMARY
-          echo "- **security.c.orig**: 原始备份文件" >> $GITHUB_STEP_SUMMARY
+          echo "### 鐢熸垚鐨勬枃浠讹細" >> $GITHUB_STEP_SUMMARY
+          echo "- **original.patch**: 鍘熷琛ヤ竵" >> $GITHUB_STEP_SUMMARY
+          echo "- **regenerated-security-hooks.patch**: 閲嶆柊鐢熸垚鐨勮ˉ涓? >> $GITHUB_STEP_SUMMARY
+          echo "- **security.c**: 鏈€缁堜慨鏀瑰悗鐨勬枃浠? >> $GITHUB_STEP_SUMMARY
+          echo "- **security.c.orig**: 鍘熷澶囦唤鏂囦欢" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 如何应用：" >> $GITHUB_STEP_SUMMARY
-          echo "1. 下载 Artifact 并解压" >> $GITHUB_STEP_SUMMARY
-          echo "2. 进入内核目录: \`cd kernel\`" >> $GITHUB_STEP_SUMMARY
-          echo "3. 应用补丁: \`git apply ../regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
-          echo "4. 如果失败: \`patch -p1 < ../regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
+          echo "### 濡備綍搴旂敤锛? >> $GITHUB_STEP_SUMMARY
+          echo "1. 涓嬭浇 Artifact 骞惰В鍘? >> $GITHUB_STEP_SUMMARY
+          echo "2. 杩涘叆鍐呮牳鐩綍: \`cd kernel\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. 搴旂敤琛ヤ竵: \`git apply ../regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. 濡傛灉澶辫触: \`patch -p1 < ../regenerated-security-hooks.patch\`" >> $GITHUB_STEP_SUMMARY

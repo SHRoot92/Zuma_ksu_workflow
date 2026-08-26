@@ -1,4 +1,4 @@
-name: Clean Orphan Tags
+﻿name: Clean Orphan Tags
 
 permissions:
   contents: write
@@ -6,14 +6,13 @@ permissions:
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0'  # 每周日午夜自动运行
-
+    - cron: '0 0 * * 0'  # 姣忓懆鏃ュ崍澶滆嚜鍔ㄨ繍琛?
 jobs:
   clean-orphan-tags:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -22,83 +21,80 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🔍 Fetching all tags and releases..."
+          echo "馃攳 Fetching all tags and releases..."
           
-          # 获取所有有 Release 的 tag（使用 gh CLI）
-          echo "📋 Getting tags with releases..."
+          # 鑾峰彇鎵€鏈夋湁 Release 鐨?tag锛堜娇鐢?gh CLI锛?          echo "馃搵 Getting tags with releases..."
           gh release list --limit 1000 --json tagName --jq '.[].tagName' | sort > released_tags.txt || echo "" > released_tags.txt
           
-          echo "✅ Tags with releases:"
+          echo "鉁?Tags with releases:"
           cat released_tags.txt
           echo "---"
           
-          # 获取所有本地 tag 并排序
-          echo "🏷️  Getting all tags..."
+          # 鑾峰彇鎵€鏈夋湰鍦?tag 骞舵帓搴?          echo "馃彿锔? Getting all tags..."
           git tag -l | sort > all_tags.txt
           
-          echo "📊 All tags:"
+          echo "馃搳 All tags:"
           cat all_tags.txt
           echo "---"
           
-          # 验证文件确实已排序
-          echo "🔧 Verifying sorted order..."
+          # 楠岃瘉鏂囦欢纭疄宸叉帓搴?          echo "馃敡 Verifying sorted order..."
           if ! sort -c released_tags.txt 2>/dev/null; then
-            echo "⚠️  released_tags.txt not sorted, fixing..."
+            echo "鈿狅笍  released_tags.txt not sorted, fixing..."
             sort -o released_tags.txt released_tags.txt
           fi
           if ! sort -c all_tags.txt 2>/dev/null; then
-            echo "⚠️  all_tags.txt not sorted, fixing..."
+            echo "鈿狅笍  all_tags.txt not sorted, fixing..."
             sort -o all_tags.txt all_tags.txt
           fi
           
-          # 使用临时文件确保排序
+          # 浣跨敤涓存椂鏂囦欢纭繚鎺掑簭
           sort -o all_tags.txt all_tags.txt
           sort -o released_tags.txt released_tags.txt
           
-          echo "🕵️  Finding orphan tags..."
-          # 找出在 all_tags.txt 中但不在 released_tags.txt 中的 tag
+          echo "馃暤锔? Finding orphan tags..."
+          # 鎵惧嚭鍦?all_tags.txt 涓絾涓嶅湪 released_tags.txt 涓殑 tag
           ORPHAN_TAGS=$(comm -23 all_tags.txt released_tags.txt)
           
           if [ -z "$ORPHAN_TAGS" ]; then
-            echo "✨ No orphan tags found! All tags are associated with releases."
-            echo "✨ No orphan tags found." >> $GITHUB_STEP_SUMMARY
+            echo "鉁?No orphan tags found! All tags are associated with releases."
+            echo "鉁?No orphan tags found." >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           
-          echo "🗑️  Orphan tags to be deleted:"
+          echo "馃棏锔? Orphan tags to be deleted:"
           echo "$ORPHAN_TAGS"
           echo "---"
           
-          # 删除孤儿 tag
-          echo "🚮 Deleting orphan tags..."
+          # 鍒犻櫎瀛ゅ効 tag
+          echo "馃毊 Deleting orphan tags..."
           DELETED_COUNT=0
           FAILED_TAGS=""
           
           while IFS= read -r tag; do
             if [ -n "$tag" ]; then
-              echo "  ❌ Deleting: $tag"
+              echo "  鉂?Deleting: $tag"
               if git push origin --delete "$tag" 2>/dev/null; then
                 ((DELETED_COUNT++))
-                echo "     ✅ Successfully deleted"
+                echo "     鉁?Successfully deleted"
               else
-                echo "     ⚠️  Failed to delete: $tag (may already be removed)"
+                echo "     鈿狅笍  Failed to delete: $tag (may already be removed)"
                 FAILED_TAGS="$FAILED_TAGS\n- $tag"
               fi
             fi
           done <<< "$ORPHAN_TAGS"
           
           echo "---"
-          echo "✅ Cleanup complete! Deleted $DELETED_COUNT orphan tags."
+          echo "鉁?Cleanup complete! Deleted $DELETED_COUNT orphan tags."
           
-          # 生成 GitHub Actions 步骤摘要
+          # 鐢熸垚 GitHub Actions 姝ラ鎽樿
           {
-            echo "## 🧹 Tag Cleanup Report"
+            echo "## 馃Ч Tag Cleanup Report"
             echo ""
             echo "| Status | Tag |"
             echo "|--------|-----|"
             while IFS= read -r tag; do
               if [ -n "$tag" ]; then
-                echo "| 🗑️ Deleted | \`$tag\` |"
+                echo "| 馃棏锔?Deleted | \`$tag\` |"
               fi
             done <<< "$ORPHAN_TAGS"
             echo ""
@@ -117,41 +113,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "🔄 Trying alternative method using grep..."
+          echo "馃攧 Trying alternative method using grep..."
           
-          # 使用 grep 替代 comm 方法
+          # 浣跨敤 grep 鏇夸唬 comm 鏂规硶
           gh release list --limit 1000 --json tagName --jq '.[].tagName' | sort > released_tags.txt
           git tag -l | sort > all_tags.txt
           
-          echo "📋 Tags with releases:"
+          echo "馃搵 Tags with releases:"
           cat released_tags.txt
           echo "---"
-          echo "📊 All tags:"
+          echo "馃搳 All tags:"
           cat all_tags.txt
           echo "---"
           
-          # 用 grep 找出孤儿 tag
-          echo "🕵️  Finding orphan tags with grep..."
+          # 鐢?grep 鎵惧嚭瀛ゅ効 tag
+          echo "馃暤锔? Finding orphan tags with grep..."
           ORPHAN_TAGS=$(grep -v -x -f released_tags.txt all_tags.txt || true)
           
           if [ -z "$ORPHAN_TAGS" ]; then
-            echo "✨ No orphan tags found!"
+            echo "鉁?No orphan tags found!"
             exit 0
           fi
           
-          echo "🗑️  Orphan tags to be deleted:"
+          echo "馃棏锔? Orphan tags to be deleted:"
           echo "$ORPHAN_TAGS"
           
-          # 删除这些 tag
+          # 鍒犻櫎杩欎簺 tag
           echo "$ORPHAN_TAGS" | while IFS= read -r tag; do
             if [ -n "$tag" ]; then
-              echo "  ❌ Deleting: $tag"
-              git push origin --delete "$tag" || echo "     ⚠️  Failed to delete: $tag"
+              echo "  鉂?Deleting: $tag"
+              git push origin --delete "$tag" || echo "     鈿狅笍  Failed to delete: $tag"
             fi
           done
 
-  # 可选的：生成清理历史记录
-  log-cleanup:
+  # 鍙€夌殑锛氱敓鎴愭竻鐞嗗巻鍙茶褰?  log-cleanup:
     needs: clean-orphan-tags
     runs-on: ubuntu-latest
     if: always()
@@ -170,7 +165,7 @@ jobs:
           echo "Workflow URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> cleanup.log
           
       - name: Upload cleanup log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: cleanup-log-${{ github.run_id }}
           path: cleanup.log
