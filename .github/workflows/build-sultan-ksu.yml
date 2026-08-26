@@ -332,7 +332,9 @@ jobs:
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
           echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
-          echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
+          if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
+            echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
+          fi
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -621,7 +623,9 @@ jobs:
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
           echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
-          echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
+          if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
+            echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
+          fi
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -703,12 +707,14 @@ jobs:
             eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY|SUSFS_VER)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
           fi
           if [ -z "$SUSFS_VER" ] || [ "$SUSFS_VER" = "unknown" ]; then
-            DETECTED_SUSFS=$(find ./all_artifacts -name "*SUSFS_*.zip" | head -n1 | grep -oE 'SUSFS_[^-\.]+' | sed 's/SUSFS_//' || true)
+            DETECTED_SUSFS=$(find ./all_artifacts -name "*SUSFS_*.zip" -type f | head -n1 | sed -E 's/.*SUSFS_([^-]+)-.*/\1/' || true)
             if [ -n "$DETECTED_SUSFS" ]; then
               SUSFS_VER="$DETECTED_SUSFS"
             fi
           fi
-          SUSFS_VER="${SUSFS_VER:-v2.2.0}"
+          if [ -z "$SUSFS_VER" ] || [ "$SUSFS_VER" = "unknown" ]; then
+            SUSFS_VER="v2.2.0"
+          fi
           TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
           KERNEL_VER="${KERNEL_VER:-6.1}"
           KSU_VER="${KSU_VER:-unknown}"
