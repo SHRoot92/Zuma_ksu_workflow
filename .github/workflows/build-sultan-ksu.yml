@@ -112,6 +112,11 @@ jobs:
             echo "USE_CCACHE=1" >> $GITHUB_ENV
             echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
             echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESS=true" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESSTYPE=zstd" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
+            echo "CCACHE_BASEDIR=${{ github.workspace }}" >> $GITHUB_ENV
+            echo "CCACHE_NOHASHDIR=true" >> $GITHUB_ENV
           else
             echo "USE_CCACHE=0" >> $GITHUB_ENV
           fi
@@ -385,6 +390,11 @@ jobs:
             echo "USE_CCACHE=1" >> $GITHUB_ENV
             echo "CCACHE_COMPILERCHECK=content" >> $GITHUB_ENV
             echo "CCACHE_SLOPPINESS=file_macro,include_file_mtime,time_macros" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESS=true" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESSTYPE=zstd" >> $GITHUB_ENV
+            echo "CCACHE_COMPRESSLEVEL=1" >> $GITHUB_ENV
+            echo "CCACHE_BASEDIR=${{ github.workspace }}" >> $GITHUB_ENV
+            echo "CCACHE_NOHASHDIR=true" >> $GITHUB_ENV
           else
             echo "USE_CCACHE=0" >> $GITHUB_ENV
           fi
