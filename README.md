@@ -1,86 +1,84 @@
-# Sultan Kernels for Cheetah
+﻿# Sultan Kernel for Google Pixel 7 / Pro (gs201)
 
-## Your warranty is no longer valid!
-
-I am **not responsible** for bricked devices, damaged hardware, or any issues that arise from using this kernel.
-
-**Please** do thorough research and fully understand the features included in this kernel before flashing it!
-
-By flashing this kernel, **YOU** are choosing to make these modifications. If something goes wrong, **do not blame me**!
+Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kernel** with **KernelSU (xxKSU)** and **SuSFS** for Google Tensor G2 devices (`gs201` — Cheetah & Panther).
 
 ---
 
-### Proceed at your own risk!
+## 📱 Supported Devices
+
+| Codename | Device Name | Platform | Kernel Base |
+| :--- | :--- | :--- | :--- |
+| **Cheetah** | Google Pixel 7 Pro | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
+| **Panther** | Google Pixel 7 | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
 
 ---
 
-# Kernels:
- 
-[GKI](https://github.com/WildKernels/GKI_KernelSU_SUSFS)  
-[Sultan](https://github.com/WildKernels/Sultan_KernelSU_SUSFS)  
-[OnePlus](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS)  
-[Legacy Pixels](https://github.com/WildKernels/Pixel_KernelSU_SUSFS)  
+## 📦 Release Artifact Naming Convention
+
+Artifact packages follow a standardized, structured naming format:
+
+```text
+KSU_Sultan_gs201_6.1+<KSU_VER>[-staging]-<Hook>[-SUSFS_v<SuSFS_VER>]-<YYMMDD>.zip
+```
+
+### Examples:
+- **`KSU_Sultan_gs201_6.1+12000-manual-SUSFS_v2.2.0-260826.zip`**
+  *(Manual Security Hooks + SuSFS, Stable KSU `master` release)*
+- **`KSU_Sultan_gs201_6.1+12000-manual-260826.zip`**
+  *(Manual Security Hooks, Clean KSU without SuSFS)*
+- **`KSU_Sultan_gs201_6.1+12055-staging-lsm-SUSFS_v2.2.0-260826.zip`**
+  *(LSM Security Hooks + SuSFS, KSU `staging` pre-release)*
 
 ---
 
-# Other Links:
+## 🪝 Hook Modes & Variant Breakdown
 
-[Kernel Patches](https://github.com/WildKernels/kernel_patches)  
-[Old Build Scripts](https://github.com/TheWildJames/kernel_build_scripts)  
-[Horizon Kernel Flasher](https://github.com/libxzr/HorizonKernelFlasher)  
+Sultan kernel disables `CONFIG_KPROBES` by default. This repository provides two specialized hook implementations:
 
----
-
-# Installation instructions: 
-
-Follow the steps for GKI:  
-[Installation](https://kernelsu.org/guide/installation.html)
-
-To get boot.img format:  
-[Get My Kernel Format](https://github.com/TheWildJames/Get_My_Kernel_Format)
+| Variant | Hook Mode | Description | Stealth / Recommendation |
+| :--- | :--- | :--- | :--- |
+| **`manual-SUSFS`** | Direct Patch (`manual`) | Inlines KSU hooks directly into kernel security functions. | 🛡️ **Highest stealth** (Recommended) |
+| **`manual`** | Direct Patch (`manual`) | Clean KernelSU integration via manual patches without SuSFS. | Standard root |
+| **`lsm-SUSFS`** | ARM64 BL Hookless (`lsm`) | Uses LSM security hooks with Branch-Link trampoline hooking. | Alternative hookless approach |
+| **`lsm`** | ARM64 BL Hookless (`lsm`) | Clean LSM security hooks without SuSFS. | Standard hookless root |
 
 ---
 
-# Features
+## ⚡ Build Features & Enhancements
 
-- **KernelSU**: KernelSU is a root solution for Android GKI devices, it works in kernel mode and grants root permission to userspace applications directly in kernel space.
-- **SUSFS**: An addon root hiding kernel patches and userspace module for KernelSU.
-
----
-
-# Credits
-
-- **KernelSU**: Developed by [tiann](https://github.com/tiann/KernelSU).
-- **KernelSU-Next**: Developed by [rifsxd](https://github.com/KernelSU-Next/KernelSU-Next).
-- **SUSFS**: Developed by [simonpunk](https://gitlab.com/simonpunk/susfs4ksu.git).
-- **SUSFS Module**: Developed by [sidex15](https://github.com/sidex15).
-- **Sultan Kernels**: Developed by [kerneltoast](https://github.com/kerneltoast).
-
-Special thanks to the open-source community for their contributions!
+- **ARM GNU Toolchain (14.2.rel1)**: Built with official Bare-Metal ARM toolchain for maximum performance and stability.
+- **Full Speedup Suite**:
+  - 🌲 **Kernel Tree Cache**: Instant source tree recovery keyed by upstream commit SHA.
+  - 🧰 **Toolchain Cache**: Zero-delay compiler restoration.
+  - ⚡ **Memory Tmpfs (`/dev/shm`)**: Intermediate compiler objects stored in RAM disk to eliminate virtual disk I/O latency.
+  - 🎯 **Ccache 90%+ Hit Rate**: Relocatable cache configuration for 3-minute rapid rebuilds.
+- **Networking & Routing Optimizations**:
+  - TCP Congestion: BBR v1 + FQ default
+  - Policy Routing (Table 1066) & 64k IPSet support
+  - Google VPN (XFRM) & TTL 64 share compatibility
 
 ---
 
-# Support
+## 📥 Installation
 
-If you encounter any issues or need help, feel free to open an issue in this repository or reach out to me.
-
----
-
-# Disclaimer
-
-Flashing this kernel will void your warranty, and there is always a risk of bricking your device. Please make sure to back up your data and ensure you understand the risks before proceeding.
-
-**Proceed at your own risk!**
+1. Download the flashable AnyKernel3 `.zip` matching your preference from [Releases](../../releases).
+2. Flash using any root/kernel manager app:
+   - [Kernel Flasher](https://github.com/capntrips/KernelFlasher)
+   - [Horizon Kernel Flasher](https://github.com/libxzr/HorizonKernelFlasher)
+   - Or flash via custom recovery (TWRP).
+3. Reboot your device.
 
 ---
 
-[Telegram](https://t.me/TheWildJames)  
-[Telegram Group](https://t.me/Wild_Kernels)  
+## 📜 Disclaimer
 
-# Special thanks to the following people for their contributions!
-This helps me alot! <3
+Flashing custom kernels and modifying system partitions involves inherent risks. Please make sure you have backups before proceeding. **Proceed at your own risk.**
 
-[simonpunk](https://gitlab.com/simonpunk/susfs4ksu.git) - Created SUSFS!  
-[sidex15](https://github.com/sidex15) - Created module!
+---
 
-If you have contributed and are not here please remind me!
+## 🙏 Credits & Acknowledgements
+
+- **Sultan Kernel**: [kerneltoast (Sultan Alsawaf)](https://github.com/kerneltoast)
+- **KernelSU**: [tiann](https://github.com/tiann/KernelSU) & [backslashxx (xxKSU)](https://github.com/backslashxx/KernelSU)
+- **SuSFS**: [simonpunk](https://gitlab.com/simonpunk/susfs4ksu)
+- **AnyKernel3**: [osm0sis](https://github.com/osm0sis/AnyKernel3) & [TheWildJames](https://github.com/TheWildJames/AnyKernel3)
