@@ -43,7 +43,6 @@ on:
 permissions:
   contents: write
   actions: write
-  workflows: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}
