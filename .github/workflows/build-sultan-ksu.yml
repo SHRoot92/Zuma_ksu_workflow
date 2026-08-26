@@ -114,6 +114,8 @@ jobs:
           restore-keys: |
             ccache-gs201-manual-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
             ccache-gs201-manual-${{ matrix.enable_susfs }}-
+            ccache-gs201-${{ matrix.enable_susfs }}-
+            ccache-gs201-
 
       - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
@@ -400,6 +402,8 @@ jobs:
           restore-keys: |
             ccache-gs201-lsm-${{ matrix.enable_susfs }}-${{ github.event.inputs.ksu_branch || 'master' }}-
             ccache-gs201-lsm-${{ matrix.enable_susfs }}-
+            ccache-gs201-${{ matrix.enable_susfs }}-
+            ccache-gs201-
 
       - name: Setup Ccache Configurations & Wrappers
         if: github.event.inputs.use_ccache != 'false'
