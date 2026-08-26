@@ -670,10 +670,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           KSU_BRANCH: ${{ github.event.inputs.ksu_branch || 'master' }}
         run: |
-          DATE=$(date +"%Y.%m.%d")
-          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
-          REV=$(( ${MAX_REV:-0} + 1 ))
-          TAG="${DATE}-r${REV}"
+          DATE=$(date +"%y%m%d")
+          if ! git rev-parse "$DATE" >/dev/null 2>&1; then
+            TAG="$DATE"
+          else
+            MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
+            REV=$(( ${MAX_REV:-0} + 1 ))
+            TAG="${DATE}-r${REV}"
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
