@@ -332,6 +332,7 @@ jobs:
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
           echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
+          echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -620,6 +621,7 @@ jobs:
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
           echo "S_TAG='${S_TAG}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
+          echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -698,8 +700,15 @@ jobs:
           fi
 
           if [ -f "./all_artifacts/build_metadata.env" ]; then
-            eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
+            eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY|SUSFS_VER)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
           fi
+          if [ -z "$SUSFS_VER" ] || [ "$SUSFS_VER" = "unknown" ]; then
+            DETECTED_SUSFS=$(find ./all_artifacts -name "*SUSFS_*.zip" | head -n1 | grep -oE 'SUSFS_[^-\.]+' | sed 's/SUSFS_//' || true)
+            if [ -n "$DETECTED_SUSFS" ]; then
+              SUSFS_VER="$DETECTED_SUSFS"
+            fi
+          fi
+          SUSFS_VER="${SUSFS_VER:-v2.2.0}"
           TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
           KERNEL_VER="${KERNEL_VER:-6.1}"
           KSU_VER="${KSU_VER:-unknown}"
@@ -713,7 +722,7 @@ jobs:
             DEBUG_NOTE="> 🛠️ **Debug Symbols**: Includes \`vmlinux\` and \`System.map\` debug symbol archives for kernel debugging."
           fi
 
-          RELEASE_TITLE="Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER)"
+          RELEASE_TITLE="Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER / SuSFS $SUSFS_VER)"
           BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
           {
@@ -725,15 +734,16 @@ jobs:
             echo "| **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
             echo "| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |"
             echo "| **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |"
+            echo "| **SuSFS Version** | \`$SUSFS_VER\` |"
             echo "| **Compiler** | $TOOLCHAIN_DISPLAY |"
             echo "| **Build Date** | $BUILD_TIME |"
             echo ""
             echo "### 📦 Variant Breakdown"
             echo "| Package | Security Hook Mode | SuSFS Status | Stealth Level |"
             echo "| :--- | :--- | :--- | :--- |"
-            echo "| \`*-manual-SUSFS-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled | 🛡️ **Maximum Stealth** (Recommended) |"
+            echo "| \`*-manual-SUSFS_${SUSFS_VER}-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled (\`$SUSFS_VER\`) | 🛡️ **Maximum Stealth** (Recommended) |"
             echo "| \`*-manual-*.zip\` | Manual Security Hooks (Inline) | ❌ Clean KSU | Standard Root |"
-            echo "| \`*-lsm-SUSFS-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled | Hookless Stealth |"
+            echo "| \`*-lsm-SUSFS_${SUSFS_VER}-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled (\`$SUSFS_VER\`) | Hookless Stealth |"
             echo "| \`*-lsm-*.zip\` | LSM Security Hooks (BL Hookless) | ❌ Clean KSU | Standard Hookless Root |"
             echo ""
             if [ -n "$DEBUG_NOTE" ]; then
