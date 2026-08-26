@@ -1,4 +1,4 @@
-﻿name: Build Sultan + KSU (Matrix)
+name: Build Sultan + KSU (Matrix)
 
 on:
   workflow_dispatch:
@@ -208,8 +208,11 @@ jobs:
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
-          TOOLCHAIN_VER_FULL=$(${TOOLCHAIN_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
-          TOOLCHAIN_VER=$(echo "$TOOLCHAIN_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          RAW_TOOLCHAIN_STR=$(${TOOLCHAIN_PATH}gcc --version 2>&1 | head -n1)
+          TOOLCHAIN_DISPLAY=$(echo "$RAW_TOOLCHAIN_STR" | sed -n 's/^[^(]*(\([^)]*\)).*/\1/p')
+          if [ -z "$TOOLCHAIN_DISPLAY" ]; then
+            TOOLCHAIN_DISPLAY="$RAW_TOOLCHAIN_STR"
+          fi
 
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
@@ -225,7 +228,7 @@ jobs:
 
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
-          echo "toolchain_version=$TOOLCHAIN_VER" >> "$GITHUB_OUTPUT"
+          echo "toolchain_display=$TOOLCHAIN_DISPLAY" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
@@ -235,7 +238,7 @@ jobs:
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: manual"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
-          echo "⚙️ Toolchain: ARM GNU Toolchain ($TOOLCHAIN_VER)"
+          echo "⚙️ Toolchain: $TOOLCHAIN_DISPLAY"
           echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
@@ -346,6 +349,13 @@ jobs:
 
           mkdir -p ./output_artifacts
           mv "$ZIP_NAME" ./output_artifacts/
+
+          TOOLCHAIN_DISPLAY="${{ steps.meta.outputs.toolchain_display }}"
+          S_TAG="${{ steps.meta.outputs.s_tag }}"
+          echo "KERNEL_VER=${KERNEL_VER}" > ./output_artifacts/build_metadata.env
+          echo "KSU_VER=${K_VER}" >> ./output_artifacts/build_metadata.env
+          echo "S_TAG=${S_TAG}" >> ./output_artifacts/build_metadata.env
+          echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> ./output_artifacts/build_metadata.env
 
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
@@ -498,8 +508,11 @@ jobs:
           S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
-          TOOLCHAIN_VER_FULL=$(${TOOLCHAIN_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
-          TOOLCHAIN_VER=$(echo "$TOOLCHAIN_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          RAW_TOOLCHAIN_STR=$(${TOOLCHAIN_PATH}gcc --version 2>&1 | head -n1)
+          TOOLCHAIN_DISPLAY=$(echo "$RAW_TOOLCHAIN_STR" | sed -n 's/^[^(]*(\([^)]*\)).*/\1/p')
+          if [ -z "$TOOLCHAIN_DISPLAY" ]; then
+            TOOLCHAIN_DISPLAY="$RAW_TOOLCHAIN_STR"
+          fi
 
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
@@ -515,7 +528,7 @@ jobs:
 
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
           echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
-          echo "toolchain_version=$TOOLCHAIN_VER" >> "$GITHUB_OUTPUT"
+          echo "toolchain_display=$TOOLCHAIN_DISPLAY" >> "$GITHUB_OUTPUT"
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
 
@@ -525,7 +538,7 @@ jobs:
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: lsm (Hookless/BL)"
           echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
-          echo "⚙️ Toolchain: ARM GNU Toolchain ($TOOLCHAIN_VER)"
+          echo "⚙️ Toolchain: $TOOLCHAIN_DISPLAY"
           echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
 
@@ -630,6 +643,13 @@ jobs:
           mkdir -p ./output_artifacts
           mv "$ZIP_NAME" ./output_artifacts/
 
+          TOOLCHAIN_DISPLAY="${{ steps.meta.outputs.toolchain_display }}"
+          S_TAG="${{ steps.meta.outputs.s_tag }}"
+          echo "KERNEL_VER=${KERNEL_VER}" > ./output_artifacts/build_metadata.env
+          echo "KSU_VER=${K_VER}" >> ./output_artifacts/build_metadata.env
+          echo "S_TAG=${S_TAG}" >> ./output_artifacts/build_metadata.env
+          echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> ./output_artifacts/build_metadata.env
+
           if [ "$KSU_BRANCH" = "staging" ]; then
             echo "Packaging debug symbols for staging build..."
             VMLINUX_ZIP_NAME="vmlinux-${BASE_NAME}.zip"
@@ -704,6 +724,13 @@ jobs:
             exit 1
           fi
 
+          if [ -f "./all_artifacts/build_metadata.env" ]; then
+            source ./all_artifacts/build_metadata.env
+          fi
+          TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
+          KERNEL_VER="${KERNEL_VER:-6.1}"
+          KSU_VER="${KSU_VER:-unknown}"
+
           PRERELEASE_FLAG=""
           TITLE_PREFIX="Release"
           DEBUG_NOTE=""
@@ -722,9 +749,9 @@ jobs:
           | Component | Details |
           | :--- | :--- |
           | **Device** | Google Pixel 7 / Pro (gs201 - Cheetah/Panther) |
-          | **Kernel Base** | Sultan (Linux 6.1) |
-          | **KernelSU Branch** | \`$KSU_BRANCH\` |
-          | **Toolchain** | ARM GNU Toolchain (14.2.rel1) |
+          | **Kernel Base** | Sultan (Linux $KERNEL_VER) |
+          | **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |
+          | **Toolchain** | $TOOLCHAIN_DISPLAY |
 
           ### 📦 Variant Breakdown
           - **manual-SUSFS**: Manual Security Hooks + SuSFS (Recommended for maximum stealth)
