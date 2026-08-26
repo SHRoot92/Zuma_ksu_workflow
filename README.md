@@ -6,7 +6,7 @@ Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kern
 
 ## 📱 Supported Devices
 
-| Codename | Device Name | Platform | Kernel Base |
+| Codename | Device Name | SoC / Platform | Kernel Base |
 | :--- | :--- | :--- | :--- |
 | **Cheetah** | Google Pixel 7 Pro | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
 | **Panther** | Google Pixel 7 | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
@@ -15,7 +15,7 @@ Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kern
 
 ## 📦 Release Artifact Naming Convention
 
-Artifact packages follow a standardized, structured naming format:
+Artifact packages follow the standardized Scheme A naming format:
 
 ```text
 KSU_Sultan_gs201_6.1+<KSU_VER>[-staging]-<Hook>[-SUSFS_v<SuSFS_VER>]-<YYMMDD>.zip
@@ -46,12 +46,12 @@ Sultan kernel disables `CONFIG_KPROBES` by default. This repository provides two
 
 ## ⚡ Build Features & Enhancements
 
-- **ARM GNU Toolchain (14.2.rel1)**: Built with official Bare-Metal ARM toolchain for maximum performance and stability.
-- **Full Speedup Suite**:
-  - 🌲 **Kernel Tree Cache**: Instant source tree recovery keyed by upstream commit SHA.
-  - 🧰 **Toolchain Cache**: Zero-delay compiler restoration.
+- **ARM GNU Toolchain (14.2.rel1)**: Built with official Bare-Metal ARM GNU toolchain with dynamic version detection directly from compiler binary.
+- **Full Speedup & Cache Suite**:
+  - 🧰 **Toolchain Cache**: Instant zero-delay compiler restoration via `actions/cache@v6.1.0`.
   - ⚡ **Memory Tmpfs (`/dev/shm`)**: Intermediate compiler objects stored in RAM disk to eliminate virtual disk I/O latency.
-  - 🎯 **Ccache 90%+ Hit Rate**: Relocatable cache configuration for 3-minute rapid rebuilds.
+  - 🎯 **Ccache 90%+ Hit Rate**: Relocatable cache configuration for 8-minute rapid rebuilds.
+  - 🚀 **Git Protocol v2 & HTTP/2**: Shallow single-branch fast cloning with zero patch collision.
 - **Networking & Routing Optimizations**:
   - TCP Congestion: BBR v1 + FQ default
   - Policy Routing (Table 1066) & 64k IPSet support
@@ -81,4 +81,4 @@ Flashing custom kernels and modifying system partitions involves inherent risks.
 - **Sultan Kernel**: [kerneltoast (Sultan Alsawaf)](https://github.com/kerneltoast)
 - **KernelSU**: [tiann](https://github.com/tiann/KernelSU) & [backslashxx (xxKSU)](https://github.com/backslashxx/KernelSU)
 - **SuSFS**: [simonpunk](https://gitlab.com/simonpunk/susfs4ksu)
-- **AnyKernel3**: [osm0sis](https://github.com/osm0sis/AnyKernel3) & [TheWildJames](https://github.com/TheWildJames/AnyKernel3)
+- **AnyKernel3**: [osm0sis](https://github.com/osm0sis/AnyKernel3)
