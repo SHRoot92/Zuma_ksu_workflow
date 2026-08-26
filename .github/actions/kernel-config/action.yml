@@ -8,9 +8,14 @@ inputs:
     description: 'Path to the build.config file (optional)'
     required: false
     default: ''
+  hook_mode:
+    description: 'Hook mode (manual, lsm)'
+    required: false
+    default: 'manual'
   variant:
-    description: 'KSU variant (xxksu, xxksu_staging, xxksu_manual)'
-    required: true
+    description: 'Legacy variant input for backwards compatibility (xxksu, xxksu_staging, xxksu_manual)'
+    required: false
+    default: ''
   enable_susfs:
     description: 'Set to "true" to inject SuSFS configs'
     required: false
@@ -108,35 +113,33 @@ runs:
         CONFIG_DEFAULT_BBR=y
         EOF
 
-        # Variant-Specific KSU Logic
-        if [ "${{ inputs.variant }}" = "xxksu" ]; then
-        cat >> "$DEFCONFIG" <<-'EOF'
-        CONFIG_KSU=y
-        CONFIG_KSU_EXTRAS=y
-        # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
-        # CONFIG_KSU_DEBUG is not set
-        # CONFIG_KSU_KPROBES_HOOK is not set
-        CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
-        CONFIG_KSU_LSM_SECURITY_HOOKS=y
-        CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
-        EOF
-        elif [ "${{ inputs.variant }}" = "xxksu_staging" ]; then
-        cat >> "$DEFCONFIG" <<-'EOF'
-        CONFIG_KSU=y
-        CONFIG_KSU_EXTRAS=y
-        # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
-        # CONFIG_KSU_DEBUG is not set
-        # CONFIG_KSU_KPROBES_HOOK is not set
-        CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
-        CONFIG_KSU_LSM_SECURITY_HOOKS=y
-        CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
-        EOF
-        elif [ "${{ inputs.variant }}" = "xxksu_manual" ]; then
-        cat >> "$DEFCONFIG" <<-'EOF'
+        # Hook Mode Resolution (handles hook_mode and legacy variant input)
+        HOOK_MODE="${{ inputs.hook_mode }}"
+        if [ -n "${{ inputs.variant }}" ]; then
+          if [ "${{ inputs.variant }}" = "xxksu_manual" ]; then
+            HOOK_MODE="manual"
+          elif [ "${{ inputs.variant }}" = "xxksu" ] || [ "${{ inputs.variant }}" = "xxksu_staging" ]; then
+            HOOK_MODE="lsm"
+          fi
+        fi
+
+        if [ "$HOOK_MODE" = "manual" ]; then
+          cat >> "$DEFCONFIG" <<-'EOF'
         CONFIG_KSU=y
         CONFIG_KSU_EXTRAS=y
         CONFIG_KSU_LSM_SECURITY_HOOKS=n
         CONFIG_KSU_KPROBES_KSUD=n
+        EOF
+        elif [ "$HOOK_MODE" = "lsm" ]; then
+          cat >> "$DEFCONFIG" <<-'EOF'
+        CONFIG_KSU=y
+        CONFIG_KSU_EXTRAS=y
+        # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
+        # CONFIG_KSU_DEBUG is not set
+        # CONFIG_KSU_KPROBES_HOOK is not set
+        CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
+        CONFIG_KSU_LSM_SECURITY_HOOKS=y
+        CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
         EOF
         fi
 

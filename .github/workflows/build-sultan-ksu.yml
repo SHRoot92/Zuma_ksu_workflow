@@ -1,0 +1,372 @@
+﻿name: Build Sultan + KSU (Matrix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_branch:
+        description: 'KernelSU Branch'
+        required: true
+        type: choice
+        options:
+          - 'master'
+          - 'staging'
+        default: 'master'
+      hook_mode:
+        description: 'Hook Mode'
+        required: true
+        type: choice
+        options:
+          - 'all'
+          - 'manual'
+          - 'lsm'
+        default: 'all'
+      enable_susfs:
+        description: 'SuSFS Integration'
+        required: true
+        type: choice
+        options:
+          - 'all'
+          - 'true'
+          - 'false'
+        default: 'all'
+      create_release:
+        description: 'Create GitHub Release'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}
+  cancel-in-progress: false
+
+env:
+  ANYKERNEL_REPO: https://github.com/TheWildJames/AnyKernel3.git
+  PATCHES_REPO: https://github.com/yapixel/kernel_patches
+  SUSFS_REPO_URL: https://gitlab.com/simonpunk/susfs4ksu
+  SUSFS_REPO_BRANCH: sultan-shiba-susfs-minimal
+  SCRIPTS_REPO: https://github.com/TheSillyOk/sh
+  KSU_REPO: backslashxx/KernelSU
+  GCC_VERSION: "14.2.rel1"
+
+jobs:
+  matrix_prep:
+    name: Prepare Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          HOOK_INPUT="${{ github.event.inputs.hook_mode }}"
+          SUSFS_INPUT="${{ github.event.inputs.enable_susfs }}"
+
+          if [ -z "$HOOK_INPUT" ]; then HOOK_INPUT="all"; fi
+          if [ -z "$SUSFS_INPUT" ]; then SUSFS_INPUT="all"; fi
+
+          if [ "$HOOK_INPUT" = "all" ]; then
+            HOOKS=('manual' 'lsm')
+          else
+            HOOKS=("$HOOK_INPUT")
+          fi
+
+          if [ "$SUSFS_INPUT" = "all" ]; then
+            SUSFS_OPTS=('true' 'false')
+          else
+            SUSFS_OPTS=("$SUSFS_INPUT")
+          fi
+
+          JSON_ENTRIES=()
+          for h in "${HOOKS[@]}"; do
+            for s in "${SUSFS_OPTS[@]}"; do
+              JSON_ENTRIES+=("{\"hook_mode\":\"$h\",\"enable_susfs\":$s}")
+            done
+          done
+
+          MATRIX_JSON=$(IFS=,; echo "[${JSON_ENTRIES[*]}]")
+          echo "Generated matrix: $MATRIX_JSON"
+          echo "matrix={\"include\":$MATRIX_JSON}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.hook_mode }}, SuSFS=${{ matrix.enable_susfs }})
+    needs: matrix_prep
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix_prep.outputs.matrix) }}
+    outputs:
+      ksu_ver: ${{ steps.meta.outputs.ksu_ver }}
+      s_tag: ${{ steps.meta.outputs.s_tag }}
+      gcc_ver: ${{ steps.meta.outputs.gcc_version }}
+      kernel_ver: ${{ steps.meta.outputs.kernel_ver }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GCC
+        run: |
+          BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.GCC_VERSION }}/binrel/"
+          ARCHIVE="arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+          wget -q "${BASE_URL}/${ARCHIVE}" -O gcc.tar.xz
+          tar -xf gcc.tar.xz
+          echo "GCC_PATH=$GITHUB_WORKSPACE/arm-gnu-toolchain-${{ env.GCC_VERSION }}-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+
+      - name: Clone Source
+        run: |
+          git clone --depth=1 https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan
+          git clone --depth=1 "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3
+          git clone --depth=1 "${{ env.PATCHES_REPO }}" kernel_patches
+          git clone --depth=1 "${{ env.SCRIPTS_REPO }}" sh
+          if [ "${{ matrix.enable_susfs }}" = "true" ]; then
+            git clone --depth=1 --branch="${{ env.SUSFS_REPO_BRANCH }}" "${{ env.SUSFS_REPO_URL }}" susfs4ksu
+          fi
+
+      - name: Metadata
+        id: meta
+        run: |
+          S_TAG=$(git -C sultan tag --sort=-committerdate | head -n1 || echo "latest")
+          KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
+          GCC_VER_FULL=$(${GCC_PATH}gcc -v 2>&1 | grep "gcc version" | awk '{print $3}')
+          GCC_VER=$(echo "$GCC_VER_FULL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          
+          # Extract Linux Kernel base version (e.g., 6.1)
+          V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
+          V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
+          KERNEL_VER="${V_MAJOR}.${V_PATCH}"
+          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = "." ]; then
+            KERNEL_VER="6.1"
+          fi
+
+          echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
+          echo "s_tag=$S_TAG" >> "$GITHUB_OUTPUT"
+          echo "gcc_version=$GCC_VER" >> "$GITHUB_OUTPUT"
+          echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
+
+          echo "======================================"
+          echo "🏷️ Sultan Tag: $S_TAG"
+          echo "🐧 Kernel Base: Linux $KERNEL_VER"
+          echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
+          echo "🪝 Hook Mode: ${{ matrix.hook_mode }}"
+          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }}"
+          echo "⚙️ GCC Version: $GCC_VER"
+          echo "======================================"
+
+      - name: KSU Base & Sultan Patches
+        working-directory: sultan
+        run: |
+          KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
+          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/$KSU_BRANCH/kernel/setup.sh" | bash -s -- "$KSU_BRANCH"
+          patch -p1 < ../kernel_patches/sultan/60_scripts_mkcompile_h.patch
+          patch -p1 < ../kernel_patches/sultan/61_scripts_setlocalversion.patch
+          patch -p1 < ../kernel_patches/sultan/62_init_Makefile.patch
+          patch -p1 < ../kernel_patches/sultan/0001-modify-noinline.patch
+
+      - name: Apply Manual Hook Patches
+        if: matrix.hook_mode == 'manual'
+        working-directory: sultan
+        run: |
+          echo "Applying manual security hooks patches..."
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch"
+
+      - name: Apply SuSFS Patches
+        if: matrix.enable_susfs == true
+        working-directory: sultan
+        run: |
+          echo "Applying SuSFS patches (Sultan Android 14 6.1)..."
+          cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
+          cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
+          cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
+          patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_sultan-android14-6.1.patch" || true
+
+          echo "Applying SuSFS patch to KernelSU..."
+          cd KernelSU
+          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"
+
+      - name: Generate Defconfig
+        working-directory: sultan
+        env:
+          CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CC: ${{ env.GCC_PATH }}gcc
+        run: |
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig
+
+      - name: Inject Defconfig Flags
+        uses: ./.github/actions/kernel-config
+        with:
+          defconfig_path: "sultan/out/.config"
+          hook_mode: "${{ matrix.hook_mode }}"
+          enable_susfs: "${{ matrix.enable_susfs }}"
+
+      - name: Finalize Defconfig
+        working-directory: sultan
+        env:
+          CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CC: ${{ env.GCC_PATH }}gcc
+        run: |
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" olddefconfig 2>&1 | grep -v "warning: override" || true
+
+      - name: Build Kernel (Production)
+        working-directory: sultan
+        env:
+          KBUILD_BUILD_USER: build-user
+          KBUILD_BUILD_HOST: build-host
+          CROSS_COMPILE: ${{ env.GCC_PATH }}
+          CC: ${{ env.GCC_PATH }}gcc
+        run: |
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" -j"$(nproc --all)"
+
+      - name: Package
+        run: |
+          cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4
+          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb
+
+          DATE=$(date +'%y%m%d')
+          KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
+          K_VER="${{ steps.meta.outputs.ksu_ver }}"
+          KERNEL_VER="${{ steps.meta.outputs.kernel_ver }}"
+          HOOK_TAG="${{ matrix.hook_mode }}"
+
+          # Branch tag (omitted for master, appended for staging)
+          if [ "$KSU_BRANCH" = "staging" ]; then
+            BRANCH_TAG="-staging"
+          else
+            BRANCH_TAG=""
+          fi
+          
+          # SuSFS tag
+          if [ "${{ matrix.enable_susfs }}" = "true" ]; then
+            SUSFS_TAG="-SUSFS"
+          else
+            SUSFS_TAG=""
+          fi
+
+          # Standard naming: KSU_Sultan_gs201_6.1+12000[-staging]-manual[-SUSFS]-260826
+          BASE_NAME="KSU_Sultan_gs201_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-${HOOK_TAG}${SUSFS_TAG}-${DATE}"
+          ZIP_NAME="${BASE_NAME}.zip"
+
+          echo "Packaging AnyKernel3: $ZIP_NAME"
+          ( cd AK3 && zip -r9 "../$ZIP_NAME" . -x "*.git*" )
+
+          mkdir -p ./output_artifacts
+          mv "$ZIP_NAME" ./output_artifacts/
+
+          # Only package and upload vmlinux and System.map for staging builds
+          if [ "$KSU_BRANCH" = "staging" ]; then
+            echo "Packaging debug symbols for staging build..."
+            VMLINUX_ZIP_NAME="vmlinux-${BASE_NAME}.zip"
+            SYSMAP_ZIP_NAME="System.map-${BASE_NAME}.zip"
+
+            if [ -f "sultan/out/vmlinux" ]; then
+              cp sultan/out/vmlinux ./vmlinux
+            elif [ -f "sultan/out/arch/arm64/boot/vmlinux" ]; then
+              cp sultan/out/arch/arm64/boot/vmlinux ./vmlinux
+            else
+              find sultan/out -name "vmlinux" -type f -exec cp {} ./vmlinux \; || true
+            fi
+            if [ -f "./vmlinux" ]; then
+              zip -9 "$VMLINUX_ZIP_NAME" vmlinux
+              mv "$VMLINUX_ZIP_NAME" ./output_artifacts/
+            fi
+
+            if [ -f "sultan/out/System.map" ]; then
+              cp sultan/out/System.map ./System.map
+              zip -9 "$SYSMAP_ZIP_NAME" System.map
+              mv "$SYSMAP_ZIP_NAME" ./output_artifacts/
+            fi
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}
+          path: ./output_artifacts/*
+
+  release:
+    name: Publish Release
+    if: github.event.inputs.create_release != 'false'
+    needs: [matrix_prep, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: ./all_artifacts
+          pattern: kernel-*
+          merge-multiple: true
+
+      - name: List Artifacts
+        run: |
+          echo "=== Collected Release Artifacts ==="
+          ls -lh ./all_artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KSU_BRANCH: ${{ github.event.inputs.ksu_branch || 'master' }}
+          KSU_VER: ${{ needs.build.outputs.ksu_ver }}
+          S_TAG: ${{ needs.build.outputs.s_tag }}
+          GCC_VER: ${{ needs.build.outputs.gcc_ver }}
+          KERNEL_VER: ${{ needs.build.outputs.kernel_ver }}
+        run: |
+          DATE=$(date +"%Y.%m.%d")
+          MAX_REV=$(git tag -l "${DATE}-r*" | sed "s/${DATE}-r//" | sort -n | tail -n1)
+          REV=$(( ${MAX_REV:-0} + 1 ))
+          TAG="${DATE}-r${REV}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          ZIP_FILES=$(find ./all_artifacts -name "*.zip" -type f)
+          if [ -z "$ZIP_FILES" ]; then
+            echo "Error: No zip files found for release!"
+            exit 1
+          fi
+
+          PRERELEASE_FLAG=""
+          TITLE_PREFIX="Release"
+          DEBUG_NOTE=""
+          if [ "$KSU_BRANCH" = "staging" ]; then
+            PRERELEASE_FLAG="--prerelease"
+            TITLE_PREFIX="Pre-release (staging)"
+            DEBUG_NOTE="> 🛠️ **Debug Symbols**: Includes \`vmlinux\` and \`System.map\` debug packages."
+          fi
+
+          gh release create "$TAG" $ZIP_FILES \
+            $PRERELEASE_FLAG \
+            --title "Sultan gs201 Kernel — $TITLE_PREFIX $TAG" \
+            --notes "
+          ### 🚀 Build Information
+
+          | Component | Details |
+          | :--- | :--- |
+          | **Device** | Google Pixel 7 / Pro (gs201 - Cheetah/Panther) |
+          | **Kernel Base** | Sultan (\`$S_TAG\`, Linux \`$KERNEL_VER\`) |
+          | **KernelSU Branch** | \`$KSU_BRANCH\` (+\`$KSU_VER\`) |
+          | **Compiler** | ARM GNU GCC (\`$GCC_VER\`) |
+
+          ### 📦 Variant Breakdown
+          - **manual-SUSFS**: Manual Security Hooks + SuSFS (Recommended for maximum stealth)
+          - **manual**: Manual Security Hooks (Clean KSU)
+          - **lsm-SUSFS**: LSM Security Hooks (BL Hookless) + SuSFS
+          - **lsm**: LSM Security Hooks (BL Hookless, Clean KSU)
+
+          $DEBUG_NOTE
+
+          ### 🛠️ Networking & Security
+          - **TCP Congestion:** BBR v1 + FQ
+          - **Advanced Routing:** Policy Routing (Table 1066) + IPSet (64k)
+          - **Fixes & Enhancements:** ADDRTYPE Match, Google VPN (XFRM), TTL 64 Share
+          "
