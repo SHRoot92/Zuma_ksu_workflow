@@ -69,7 +69,7 @@ jobs:
           fi
 
   build_manual:
-    name: Manual Hook (SuSFS=${{ matrix.enable_susfs }})
+    name: Manual Hook (SUSFS=${{ matrix.enable_susfs }})
     if: github.event.inputs.hook_mode == 'all' || github.event.inputs.hook_mode == 'manual' || github.event_name != 'workflow_dispatch'
     needs: matrix_prep
     runs-on: ubuntu-latest
@@ -132,7 +132,7 @@ jobs:
           echo "🐧 Kernel Base: Linux $KERNEL_VER"
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: manual"
-          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
+          echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
           echo "======================================"
 
@@ -263,7 +263,7 @@ jobs:
           path: ./output_artifacts/*
 
   build_lsm:
-    name: LSM Hook (SuSFS=${{ matrix.enable_susfs }})
+    name: LSM Hook (SUSFS=${{ matrix.enable_susfs }})
     if: github.event.inputs.hook_mode == 'all' || github.event.inputs.hook_mode == 'lsm' || github.event_name != 'workflow_dispatch'
     needs: matrix_prep
     runs-on: ubuntu-latest
@@ -326,7 +326,7 @@ jobs:
           echo "🐧 Kernel Base: Linux $KERNEL_VER"
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: lsm (Hookless/BL)"
-          echo "🛡️ SuSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
+          echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
           echo "⚙️ GCC Version: $GCC_VER"
           echo "======================================"
 
