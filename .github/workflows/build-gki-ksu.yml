@@ -218,9 +218,19 @@ jobs:
             ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
             echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
             aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-            tar -xf pantah.tar.xz --strip-components=3 -C common "kernel-pantah-15260412/common/ack" || \
-            tar -xf pantah.tar.xz -C common
+            mkdir -p temp_pantah
+            tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
+            SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "ack" | head -n1)
+            if [ -z "$SRC_DIR" ]; then
+              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "common" | head -n1)
+            fi
+            if [ -z "$SRC_DIR" ]; then
+              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | head -n1)
+            fi
+            echo "Found kernel source directory: $SRC_DIR"
+            cp -a "$SRC_DIR"/. common/
+            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
             echo "Downloading GKI source from: $ARCHIVE_URL"
@@ -315,13 +325,15 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
           echo "⚙️ Generating GKI defconfig..."
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" \
-            DEFCONFIG=arch/arm64/configs/gki_defconfig defconfig || {
-            echo "❌ ERROR: Failed to generate defconfig"
-            exit 1
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig || \
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" defconfig KBUILD_DEFCONFIG=gki_defconfig || \
+          {
+            echo "Fallback copying arch/arm64/configs/gki_defconfig to out/.config..."
+            mkdir -p out
+            cp arch/arm64/configs/gki_defconfig out/.config
           }
           if [ ! -f "out/.config" ]; then
-            echo "❌ ERROR: Defconfig generation failed - .config not found"
+            echo "❌ ERROR: Defconfig generation failed - out/.config not found"
             exit 1
           fi
           echo "✅ GKI defconfig generated successfully"
@@ -575,9 +587,19 @@ jobs:
             ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
             echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
             aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-            tar -xf pantah.tar.xz --strip-components=3 -C common "kernel-pantah-15260412/common/ack" || \
-            tar -xf pantah.tar.xz -C common
+            mkdir -p temp_pantah
+            tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
+            SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "ack" | head -n1)
+            if [ -z "$SRC_DIR" ]; then
+              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "common" | head -n1)
+            fi
+            if [ -z "$SRC_DIR" ]; then
+              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | head -n1)
+            fi
+            echo "Found kernel source directory: $SRC_DIR"
+            cp -a "$SRC_DIR"/. common/
+            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
             echo "Downloading GKI source from: $ARCHIVE_URL"
@@ -665,13 +687,15 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
           echo "⚙️ Generating GKI defconfig..."
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" \
-            DEFCONFIG=arch/arm64/configs/gki_defconfig defconfig || {
-            echo "❌ ERROR: Failed to generate defconfig"
-            exit 1
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig || \
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" defconfig KBUILD_DEFCONFIG=gki_defconfig || \
+          {
+            echo "Fallback copying arch/arm64/configs/gki_defconfig to out/.config..."
+            mkdir -p out
+            cp arch/arm64/configs/gki_defconfig out/.config
           }
           if [ ! -f "out/.config" ]; then
-            echo "❌ ERROR: Defconfig generation failed - .config not found"
+            echo "❌ ERROR: Defconfig generation failed - out/.config not found"
             exit 1
           fi
           echo "✅ GKI defconfig generated successfully"
