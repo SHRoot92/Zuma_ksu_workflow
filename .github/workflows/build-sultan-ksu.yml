@@ -1114,13 +1114,10 @@ jobs:
           DEBUG_NOTE=""
           if [ "$KSU_BRANCH" = "staging" ]; then
             PRERELEASE_FLAG="--prerelease"
-            TITLE_PREFIX="Pre-release (staging)"
+            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel 6.1.162 - KernelSU (Staging)"
+          else
+            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel 6.1.162 - KernelSU"
           fi
-          if [ "${{ github.event.inputs.upload_debug_symbols }}" = "true" ] || find ./all_artifacts -name "vmlinux-*.zip" -type f | grep -q .; then
-            DEBUG_NOTE="> 🛠️ **Debug Symbols**: Includes \`vmlinux\` and \`System.map\` debug symbol archives for kernel debugging."
-          fi
-
-          RELEASE_TITLE="Pixel 7 / Pro (gs201) Sultan Kernel — $TITLE_PREFIX $TAG (KSU +$KSU_VER / SuSFS $SUSFS_VER)"
           BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
           {
