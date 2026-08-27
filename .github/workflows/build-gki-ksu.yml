@@ -376,7 +376,7 @@ jobs:
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
 
-          RAW_CLANG_STR=$("${CLANG_PATH}clang" --version 2>&1 | head -n1)
+          RAW_CLANG_STR=$("${CLANG_PATH}/clang" --version 2>&1 | head -n1 || echo "Clang 17.0.6")
           TOOLCHAIN_DISPLAY="$RAW_CLANG_STR"
 
           # Dynamically determine kernel version from kernel source
@@ -611,6 +611,9 @@ jobs:
     if: ${{ github.event.inputs.create_release != 'false' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v7
         with:
@@ -718,5 +721,5 @@ jobs:
             gh release upload "$TAG_NAME" release_files/*.zip --clobber
           else
             echo "Creating new release for tag $TAG_NAME..."
-            gh release create "$TAG_NAME" release_files/*.zip --title "$TITLE" --notes-file release_note.md
+            gh release create "$TAG_NAME" release_files/*.zip --target "${{ github.sha }}" --title "$TITLE" --notes-file release_note.md
           fi
