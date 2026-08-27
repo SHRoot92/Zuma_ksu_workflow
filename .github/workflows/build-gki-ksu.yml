@@ -289,7 +289,6 @@ jobs:
 
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             ccache -M 15G
-            ccache -o temp_dir=/dev/shm/ccache-temp
             ccache -z
           fi
 
