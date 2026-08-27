@@ -105,7 +105,7 @@ jobs:
           echo "new_patches_sha=$NEW_PATCHES_SHA" >> "$GITHUB_OUTPUT"
           echo "changes_desc=$CHANGES_DESC" >> "$GITHUB_OUTPUT"
 
-      - name: Update State File and Commit
+      - name: Sync Patches and Update State File
         if: steps.check_upstream.outputs.trigger_build == 'true'
         run: |
           set -e
@@ -115,18 +115,23 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           STATE_FILE=".github/upstream_state.json"
 
+          # 1. Automatically download and sync updated patches from midori01 to original paths
+          echo "🔄 Running auto-sync for upstream patches..."
+          .github/scripts/sync_upstream_patches.sh
+
+          # 2. Update state file
           jq --arg ksu "$NEW_KSU_SHA" --arg susfs "$NEW_SUSFS_SHA" --arg patch "$NEW_PATCHES_SHA" --arg time "$TIMESTAMP" \
             '.ksu_last_sha = $ksu | .susfs_last_sha = $susfs | .patches_last_sha = $patch | .last_updated = $time' \
             "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$STATE_FILE"
+          git add "$STATE_FILE" .github/patches/
           
           if git diff --staged --quiet; then
-            echo "No state changes to commit."
+            echo "No state or patch changes to commit."
           else
-            git commit -m "chore(upstream): sync state to ${NEW_KSU_SHA:0:7} (KSU), ${NEW_SUSFS_SHA:0:7} (SuSFS) & ${NEW_PATCHES_SHA:0:7} (Midori)"
+            git commit -m "chore(upstream): sync state & patches from midori01 @ ${NEW_PATCHES_SHA:0:7}"
             git push origin HEAD:${{ github.ref_name }}
           fi
 

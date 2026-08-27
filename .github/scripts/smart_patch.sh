@@ -58,7 +58,7 @@ if tr -d '\r' < "$PATCH_FILE" | patch -p1 -N -l --fuzz=3; then
     exit 0
 fi
 
-# Strategy 5: Remote Upstream Auto-Sync from midori01/gki_ksu_workflow
+# Strategy 5: Remote Upstream Auto-Sync from midori01/gki_ksu_workflow & Auto-Save to original path
 PATCH_FILENAME=$(basename "$PATCH_FILE")
 echo "⚠️ Local patch strategies failed. Attempting Strategy 5: Remote upstream sync from midori01..."
 
@@ -68,7 +68,6 @@ URL_ATTEMPTS=(
     "${MIDORI_BASE_URL}/${PATCH_FILENAME}"
 )
 
-SYNC_SUCCESS=false
 for url in "${URL_ATTEMPTS[@]}"; do
     echo "   🔍 Probing remote: $url"
     if curl -s -f -L --max-time 15 "$url" -o "$TEMP_REMOTE_PATCH"; then
@@ -76,8 +75,11 @@ for url in "${URL_ATTEMPTS[@]}"; do
             echo "   📥 Successfully fetched remote patch from midori01! Attempting apply..."
             if git apply --3way --ignore-space-change --ignore-whitespace "$TEMP_REMOTE_PATCH" 2>/dev/null ||                patch -p1 -N -l --fuzz=3 < "$TEMP_REMOTE_PATCH"; then
                 echo "   ✨ [Auto-Healing SUCCESS] Applied upstream patch from midori01 via Strategy 5!"
+                if [ -w "$PATCH_FILE" ]; then
+                    cp "$TEMP_REMOTE_PATCH" "$PATCH_FILE"
+                    echo "   💾 Persisted updated patch back to original location: $PATCH_FILE"
+                fi
                 rm -f ./*.rej ./*/*.rej ./*/*/*.rej "$TEMP_REMOTE_PATCH" 2>/dev/null || true
-                SYNC_SUCCESS=true
                 exit 0
             fi
         fi

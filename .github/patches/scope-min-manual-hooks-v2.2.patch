@@ -1,8 +1,19 @@
+From: midori01 <lv@lvlv.lv>
+Date: Tue, 2 Jun 2026 10:32:20 +0900
+Subject: [PATCH] scope-minimized manual hooks v2.2 for android14-6.1
+
+---
+ fs/exec.c       | 12 ++++++++++++
+ fs/open.c       |  9 +++++++++
+ fs/stat.c       | 25 +++++++++++++++++++++++++
+ kernel/reboot.c |  8 ++++++++
+ 4 files changed, 54 insertions(+)
+
 diff --git a/fs/exec.c b/fs/exec.c
-index ae8f80895dc6..cfa31f9cd0d7 100644
+index 6999d609d69c..26b14ac9ec1d 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -2047,12 +2047,20 @@ int kernel_execve(const char *kernel_filename,
+@@ -2048,12 +2048,21 @@ int kernel_execve(const char *kernel_filename,
  	return retval;
  }
  
@@ -11,6 +22,7 @@ index ae8f80895dc6..cfa31f9cd0d7 100644
 +extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
 +				void *argv, void *envp, int *flags);
 +#endif
++
  static int do_execve(struct filename *filename,
  	const char __user *const __user *__argv,
  	const char __user *const __user *__envp)
@@ -23,7 +35,7 @@ index ae8f80895dc6..cfa31f9cd0d7 100644
  	return do_execveat_common(AT_FDCWD, filename, argv, envp, 0);
  }
  
-@@ -2080,6 +2088,9 @@ static int compat_do_execve(struct filename *filename,
+@@ -2081,6 +2090,9 @@ static int compat_do_execve(struct filename *filename,
  		.is_compat = true,
  		.ptr.compat = __envp,
  	};
@@ -152,3 +164,6 @@ index 344ceaf5ed13..a25394bc7016 100644
  	/* We only trust the superuser with rebooting the system. */
  	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
  		return -EPERM;
+-- 
+2.54.0
+
