@@ -440,23 +440,25 @@ jobs:
       - name: Apply Hook Patches
         if: matrix.hook_mode == 'manual'
         run: |
-          cd common
+          SMART_PATCH="${{ github.workspace }}/.github/scripts/smart_patch.sh"
           echo "Applying manual security hooks patches for GKI..."
-          patch -p1 -l < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch" || true
-          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" || patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch" "common" "Manual Security Hooks v2.0" || true
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" "common" "Scope Min Hooks v2.3" || \
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" "common" "Scope Min Hooks v2.2" || true
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
         run: |
+          SMART_PATCH="${{ github.workspace }}/.github/scripts/smart_patch.sh"
           cd common
           echo "Applying SuSFS patches (GKI Android 14 6.1)..."
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs_def.h include/linux/
-          patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" || true
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" "." "SuSFS Deinlined Hooks" || true
 
           echo "Applying SuSFS patch to KernelSU..."
-          ( cd KernelSU && patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" )
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" "KernelSU" "Enable SuSFS for KernelSU"
 
       - name: Generate Defconfig
         run: |

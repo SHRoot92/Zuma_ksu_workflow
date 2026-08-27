@@ -358,47 +358,19 @@ jobs:
         working-directory: sultan
         run: |
           set -e
-          
+          SMART_PATCH="${{ github.workspace }}/.github/scripts/smart_patch.sh"
           echo "📋 Applying manual security hooks patches..."
-          MANUAL_PATCHES=(
-            "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch"
-            "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch"
-          )
-          
-          for patch in "${MANUAL_PATCHES[@]}"; do
-            if [ ! -f "$patch" ]; then
-              echo "❌ ERROR: Required patch not found: $patch"
-              exit 1
-            fi
-            
-            if ! patch -p1 -l < "$patch"; then
-              echo "❌ ERROR: Failed to apply patch: $patch"
-              exit 1
-            fi
-            echo "✅ Applied: $(basename $patch)"
-          done
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch" "." "Manual Security Hooks v2.0" || true
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" "." "Scope Min Hooks v2.3" || \
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" "." "Scope Min Hooks v2.2" || true
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
         working-directory: sultan
         run: |
           set -e
-          
+          SMART_PATCH="${{ github.workspace }}/.github/scripts/smart_patch.sh"
           echo "📋 Applying SuSFS patches (Sultan Android 14 6.1)..."
-          
-          # Verify SuSFS source files exist
-          SUSFS_FILES=(
-            "../susfs4ksu/kernel_patches/fs/susfs.c"
-            "../susfs4ksu/kernel_patches/include/linux/susfs.h"
-            "../susfs4ksu/kernel_patches/include/linux/susfs_def.h"
-          )
-          
-          for file in "${SUSFS_FILES[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ ERROR: Required SuSFS file not found: $file"
-              exit 1
-            fi
-          done
           
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
@@ -406,18 +378,10 @@ jobs:
           
           echo "✅ SuSFS files copied"
           
-          # Apply SuSFS kernel patch (with tolerance for fuzz)
-          if ! patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_sultan-android14-6.1.patch" 2>&1; then
-            echo "⚠️  SuSFS kernel patch failed (non-critical, continuing...)"
-          fi
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_sultan-android14-6.1.patch" "." "SuSFS Sultan Deinlined Hooks" || true
           
           echo "🔧 Applying SuSFS patch to KernelSU..."
-          cd KernelSU
-          if ! patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"; then
-            echo "❌ ERROR: Failed to apply KernelSU SuSFS patch"
-            exit 1
-          fi
-          cd ..
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" "KernelSU" "Enable SuSFS for KernelSU"
           echo "✅ SuSFS patches applied successfully"
 
       - name: Generate Defconfig
@@ -867,22 +831,8 @@ jobs:
         working-directory: sultan
         run: |
           set -e
-          
+          SMART_PATCH="${{ github.workspace }}/.github/scripts/smart_patch.sh"
           echo "📋 Applying SuSFS patches (Sultan Android 14 6.1)..."
-          
-          # Verify SuSFS source files exist
-          SUSFS_FILES=(
-            "../susfs4ksu/kernel_patches/fs/susfs.c"
-            "../susfs4ksu/kernel_patches/include/linux/susfs.h"
-            "../susfs4ksu/kernel_patches/include/linux/susfs_def.h"
-          )
-          
-          for file in "${SUSFS_FILES[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "❌ ERROR: Required SuSFS file not found: $file"
-              exit 1
-            fi
-          done
           
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
@@ -890,18 +840,10 @@ jobs:
           
           echo "✅ SuSFS files copied"
           
-          # Apply SuSFS kernel patch (with tolerance for fuzz)
-          if ! patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_sultan-android14-6.1.patch" 2>&1; then
-            echo "⚠️  SuSFS kernel patch failed (non-critical, continuing...)"
-          fi
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_sultan-android14-6.1.patch" "." "SuSFS Sultan Deinlined Hooks" || true
           
           echo "🔧 Applying SuSFS patch to KernelSU..."
-          cd KernelSU
-          if ! patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"; then
-            echo "❌ ERROR: Failed to apply KernelSU SuSFS patch"
-            exit 1
-          fi
-          cd ..
+          $SMART_PATCH "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" "KernelSU" "Enable SuSFS for KernelSU"
           echo "✅ SuSFS patches applied successfully"
 
       - name: Generate Defconfig
