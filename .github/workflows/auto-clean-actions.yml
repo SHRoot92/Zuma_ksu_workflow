@@ -26,9 +26,13 @@ jobs:
     name: Prune Old Runs & Caches
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Prune Workflow Runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           KEEP_COUNT: ${{ github.event.inputs.keep_runs_count || 5 }}
         run: |
           set -e
@@ -75,6 +79,7 @@ jobs:
         if: github.event.inputs.clean_stale_cache != 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -e
           echo "🧹 Inspecting GitHub Actions caches..."
