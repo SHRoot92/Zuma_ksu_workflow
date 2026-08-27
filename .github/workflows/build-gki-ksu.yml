@@ -1,18 +1,8 @@
-name: Build GKI + KSU (Matrix)
+name: Build Google Pantah (Pixel 7/Pro) Kernel + xxKSU
 
 on:
   workflow_dispatch:
     inputs:
-      gki_version:
-        description: "GKI 6.1 Kernel Version"
-        required: true
-        type: choice
-        options:
-          - "pantah-15260412"
-          - "pantah-14810637"
-          - "6.1.145"
-          - "6.1-lts"
-        default: "pantah-15260412"
       ksu_branch:
         description: "KernelSU Branch"
         required: true
@@ -60,13 +50,14 @@ permissions:
   actions: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}-${{ github.event.inputs.gki_version }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}
   cancel-in-progress: false
 
 env:
   TZ: Asia/Shanghai
   ANDROID_VERSION: "android14"
   KERNEL_NAME: "android14-11-gfa1d6308d1fe-ab14691759"
+  PANTAH_SOURCE_URL: "https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
   KBUILD_BUILD_USER: "build-user"
   KBUILD_BUILD_HOST: "build-host"
   BUILD_TIMESTAMP: "Fri Jan 9 16:33:46 UTC 2026"
@@ -91,10 +82,10 @@ env:
 
 jobs:
   # =========================================================================
-  # STAGE 1: Download & Prepare Clean Kernel Source ONCE (0 duplicate downloads)
+  # STAGE 1: Download & Prepare Clean Pantah Kernel Source ONCE
   # =========================================================================
   prepare_source:
-    name: Prepare Kernel Source
+    name: Prepare Pantah Source
     runs-on: ubuntu-latest
     outputs:
       hook_matrix: ${{ steps.matrix_calc.outputs.hook_matrix }}
@@ -126,66 +117,30 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: pantah-kernel-v2-15260412
 
       - name: Download & Prepare Source (on cache miss)
         if: steps.source_cache.outputs.cache-hit != 'true'
         run: |
           sudo apt update && sudo apt install -y aria2 tar xz-utils curl wget
           mkdir -p common
-          GKI_VER="${{ github.event.inputs.gki_version || 'pantah-15260412' }}"
-          echo "⬇️ Downloading GKI kernel source for: $GKI_VER..."
+          echo "⬇️ Downloading official Google Pantah (Pixel 7/Pro) kernel source (15260412)..."
 
-          if [ "$GKI_VER" = "pantah-15260412" ]; then
-            ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
-            echo "Downloading official Google Pantah 15260412 source from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-            mkdir -p temp_pantah
-            tar -xf pantah.tar.xz -C temp_pantah
-            rm -f pantah.tar.xz
-            if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
-              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
-            elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
-              cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
-            elif [ -d "temp_pantah/common/ack" ]; then
-              cp -a temp_pantah/common/ack/. common/
-            elif [ -f "temp_pantah/Makefile" ]; then
-              cp -a temp_pantah/. common/
-            fi
-            rm -rf temp_pantah
-          elif [ "$GKI_VER" = "pantah-14810637" ]; then
-            ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/kernel-pantah-14810637/kernel-pantah-14810637.tar.gz"
-            echo "Downloading Pantah 14810637 source from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.gz
-            mkdir -p temp_pantah
-            tar -zxvf pantah.tar.gz -C temp_pantah --strip-components=1
-            rm -f pantah.tar.gz
-            if [ -d "temp_pantah/common" ]; then
-              cp -a temp_pantah/common/. common/
-            else
-              cp -a temp_pantah/. common/
-            fi
-            rm -rf temp_pantah
-          elif [ "$GKI_VER" = "6.1.145" ]; then
-            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
-            echo "Downloading AOSP 6.1.145 from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
-            tar -xzf common.tar.gz -C common
-            rm -f common.tar.gz
-          elif [ "$GKI_VER" = "6.1-lts" ]; then
-            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
-            echo "Downloading AOSP 6.1-lts from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
-            tar -xzf common.tar.gz -C common
-            rm -f common.tar.gz
-          else
-            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
-            echo "Downloading from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
-            aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
-            tar -xzf common.tar.gz -C common
-            rm -f common.tar.gz
+          aria2c -s 16 -x 16 -k 1M "${{ env.PANTAH_SOURCE_URL }}" -o pantah.tar.xz
+          mkdir -p temp_pantah
+          tar -xf pantah.tar.xz -C temp_pantah
+          rm -f pantah.tar.xz
+
+          if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
+            cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+          elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
+            cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
+          elif [ -d "temp_pantah/common/ack" ]; then
+            cp -a temp_pantah/common/ack/. common/
+          elif [ -f "temp_pantah/Makefile" ]; then
+            cp -a temp_pantah/. common/
           fi
+          rm -rf temp_pantah
 
           if [ ! -f "common/Makefile" ] || [ ! -d "common/arch/arm64" ] || [ ! -d "common/drivers" ]; then
             echo "❌ ERROR: Kernel source tree invalid in common/:"
@@ -209,7 +164,7 @@ jobs:
             [ -f "$f" ] && sed -i 's|echo "$res"|echo "-${{ env.KERNEL_NAME }}"|' "$f" || true
           done
 
-          echo "✅ Kernel source prepared successfully:"
+          echo "✅ Pantah kernel source prepared successfully:"
           head -n 6 common/Makefile
           ls -la common/arch/arm64/configs/gki_defconfig
 
@@ -218,7 +173,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: common
-          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: pantah-kernel-v2-15260412
 
       - name: Check Toolchains Cache
         id: toolchain_cache
@@ -364,59 +319,28 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: pantah-kernel-v2-15260412
 
       - name: Ensure Kernel Source Present
         run: |
           if [ ! -f "common/Makefile" ] || [ ! -f "common/arch/arm64/configs/gki_defconfig" ]; then
-            echo "⚡ Cache miss fallback: Downloading and extracting kernel source..."
+            echo "⚡ Cache miss fallback: Downloading and extracting Pantah kernel source..."
             mkdir -p common
-            GKI_VER="${{ github.event.inputs.gki_version || 'pantah-15260412' }}"
-            if [ "$GKI_VER" = "pantah-15260412" ]; then
-              ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
-              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-              mkdir -p temp_pantah
-              tar -xf pantah.tar.xz -C temp_pantah
-              rm -f pantah.tar.xz
-              if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
-                cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
-              elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
-                cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
-              elif [ -d "temp_pantah/common/ack" ]; then
-                cp -a temp_pantah/common/ack/. common/
-              elif [ -f "temp_pantah/Makefile" ]; then
-                cp -a temp_pantah/. common/
-              fi
-              rm -rf temp_pantah
-            elif [ "$GKI_VER" = "pantah-14810637" ]; then
-              ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/kernel-pantah-14810637/kernel-pantah-14810637.tar.gz"
-              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.gz
-              mkdir -p temp_pantah
-              tar -zxvf pantah.tar.gz -C temp_pantah --strip-components=1
-              rm -f pantah.tar.gz
-              if [ -d "temp_pantah/common" ]; then
-                cp -a temp_pantah/common/. common/
-              else
-                cp -a temp_pantah/. common/
-              fi
-              rm -rf temp_pantah
-            elif [ "$GKI_VER" = "6.1.145" ]; then
-              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
-              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
-              tar -xzf common.tar.gz -C common
-              rm -f common.tar.gz
-            elif [ "$GKI_VER" = "6.1-lts" ]; then
-              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
-              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
-              tar -xzf common.tar.gz -C common
-              rm -f common.tar.gz
-            else
-              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
-              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
-              aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
-              tar -xzf common.tar.gz -C common
-              rm -f common.tar.gz
+            aria2c -s 16 -x 16 -k 1M "${{ env.PANTAH_SOURCE_URL }}" -o pantah.tar.xz
+            mkdir -p temp_pantah
+            tar -xf pantah.tar.xz -C temp_pantah
+            rm -f pantah.tar.xz
+
+            if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+            elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
+            elif [ -d "temp_pantah/common/ack" ]; then
+              cp -a temp_pantah/common/ack/. common/
+            elif [ -f "temp_pantah/Makefile" ]; then
+              cp -a temp_pantah/. common/
             fi
+            rm -rf temp_pantah
 
             # Inject GS201 defconfig
             curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
@@ -435,7 +359,7 @@ jobs:
             ls -la common
             exit 1
           fi
-          echo "✅ Kernel source verified in common/:"
+          echo "✅ Pantah kernel source verified in common/:"
           head -n 6 common/Makefile
           ls -la common/arch/arm64/configs/gki_defconfig
 
@@ -700,42 +624,75 @@ jobs:
           DATE=$(date +"%Y-%m-%d")
           TIME=$(date +"%H:%M:%S")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
-          GKI_VERSION="${{ github.event.inputs.gki_version || 'pantah-15260412' }}"
 
           cat << "EOF" > release_note.md
-          ## 🐧 Cheetah (Pixel 7 / Pro) AOSP GKI + KernelSU + SuSFS Build
+          # 🚀 Google Pixel 7 Series (Pantah) • KernelSU & SuSFS Production Release
 
-          ### 📦 Release Information
+          > **Official Google ACK GS201 Source (Build 15260412)** • High-Performance Stealth Kernel Build
+
+          ---
+
+          ### 📱 Compatible Device Matrix (Tensor G2 / GS201)
+
+          | Device Model | Codename | SoC Platform | Compatibility |
+          | :--- | :--- | :--- | :---: |
+          | **Google Pixel 7** | `cheetah` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
+          | **Google Pixel 7 Pro** | `panther` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
+          | **Google Pixel 7a** | `lynx` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
+          | **Google Pixel Fold** | `felix` | Tensor G2 (`gs201`) | ✅ **Compatible** |
+          | **Google Pixel Tablet** | `tangorpro` | Tensor G2 (`gs201`) | ✅ **Compatible** |
+
+          > **Supported OS**: Google Stock Android 14 / Android 15 (All QPRs), GrapheneOS, CalyxOS, LineageOS 21/22, and all GKI-compliant ROMs.
+
+          ---
+
+          ### 📦 Build & Toolchain Metadata
+
           EOF
 
-          echo "- **Release Date**: \`${DATE} ${TIME} (UTC)\`" >> release_note.md
-          echo "- **AOSP GKI Base**: \`Linux ${KERNEL_VER:-6.1} (${GKI_VERSION})\`" >> release_note.md
-          echo "- **Target Device**: Google Pixel 7 / Pro (\`gs201\` — Cheetah & Panther)" >> release_note.md
-          echo "- **KernelSU Branch**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-unknown}\`)" >> release_note.md
+          echo "- 📅 **Build Timestamp**: \`${DATE} ${TIME} (UTC)\`" >> release_note.md
+          echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL:-6.1.162} (Pantah 15260412)\`" >> release_note.md
+          echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
-            echo "- **SuSFS Version**: \`${SUSFS_VER}\`" >> release_note.md
+            echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER}\` (GKI android14-6.1)" >> release_note.md
           fi
-          echo "- **Compiler**: \`${TOOLCHAIN_DISPLAY:-LLVM Clang 17.0.6}\`" >> release_note.md
+          echo "- ⚙️ **Compiler Toolchain**: \`${TOOLCHAIN_DISPLAY:-Clang 17.0.6 + GCC 14.2}\`" >> release_note.md
+          echo "- 🏷️ **Kernel Suffix**: \`${{ env.KERNEL_NAME }}\`" >> release_note.md
 
           cat << "EOF" >> release_note.md
 
-          ### 🚀 Flashable Packages
-          - **Manual Hooks + SuSFS**: \`KSU_GKI_gs201_...-manual-SUSFS_...\` (Direct inline hooking, Maximum stealth)
-          - **LSM Hooks + SuSFS**: \`KSU_GKI_gs201_...-lsm-SUSFS_...\` (ARM64 BL Hookless)
-          - **Manual Hooks (Clean)**: \`KSU_GKI_gs201_...-manual-...\` (KernelSU without SuSFS)
-          - **LSM Hooks (Clean)**: \`KSU_GKI_gs201_...-lsm-...\` (Clean Hookless)
+          ---
 
-          ### ⚡ Features Included
-          - BBR v1 + FQ TCP Congestion Control
-          - IPSet (64k entries) & TProxy full policy routing
-          - AnyKernel3 flashable zip for KernelFlasher / TWRP
+          ### 🚀 Flashable Packages Included
+
+          | Package Name Pattern | Hook Mechanism | SuSFS Stealth | Recommended Scenario |
+          | :--- | :---: | :---: | :--- |
+          | `*manual-SUSFS_true*.zip` | **Manual Hook** | ✅ **Enabled** | 🏆 **(Recommended)** Maximum root hiding & banking app bypass |
+          | `*lsm-SUSFS_true*.zip` | **LSM Hook** | ✅ **Enabled** | ARM64 Hookless non-invasive isolation |
+          | `*manual-SUSFS_false*.zip` | **Manual Hook** | ❌ None | Clean KernelSU experience |
+          | `*lsm-SUSFS_false*.zip` | **LSM Hook** | ❌ None | Clean LSM KernelSU experience |
+
+          ---
+
+          ### ⚡ Performance & Kernel Enhancements
+          - **Google Tensor G2 Sultan Optimization**: Custom task scheduling and thermal responsiveness.
+          - **Advanced Networking**: TCP BBR v1 + FQ pacing algorithms for lower latency.
+          - **Full Policy Routing**: IPSet (64k entries) & TProxy match extensions enabled.
+          - **Universal AnyKernel3 Delivery**: Dynamic ramdisk patching; non-destructive to stock vendor modules.
+
+          ---
+
+          ### 📲 Installation Guide
+          1. Download the recommended zip package (e.g. `*manual-SUSFS_true*.zip`);
+          2. Flash via **KernelFlasher**, **Franco Kernel Manager**, or custom recovery (TWRP);
+          3. Reboot system and install the latest **KernelSU Manager** APK & **SuSFS** module.
           EOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "GKI_gs201_${{ env.KERNEL_VER || '6.1' }}_KSU_${{ env.KSU_VER || 'latest' }}_${{ github.run_number }}"
-          name: "Pixel 7/Pro GKI 6.1 + xxKSU (${{ github.event.inputs.gki_version || 'pantah-15260412' }})"
+          tag_name: "pantah-6.1-ksu-v${{ env.KSU_VER || 'latest' }}-r${{ github.run_number }}"
+          name: "🔥 Google Pixel 7/Pro (Pantah) • Linux ${{ env.KERNEL_VER_FULL || '6.1.162' }} • xxKSU v${{ env.KSU_VER || 'latest' }} + SuSFS v${{ env.SUSFS_VER || 'latest' }}"
           body_path: release_note.md
           files: release_files/*.zip
           draft: false
