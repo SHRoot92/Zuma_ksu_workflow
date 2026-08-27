@@ -117,7 +117,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: pantah-kernel-v2-15260412
+          key: pantah-kernel-v3-15260412
 
       - name: Download & Prepare Source (on cache miss)
         if: steps.source_cache.outputs.cache-hit != 'true'
@@ -148,12 +148,6 @@ jobs:
             exit 1
           fi
 
-          # Inject Google Tensor GS201 defconfig
-          echo "Injecting Tensor G2 (gs201) defconfig..."
-          curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
-            -o common/arch/arm64/configs/gki_defconfig
-          cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/gs201_defconfig
-
           # Clean dirty suffix & remove ABI limitations
           rm -f common/android/abi_gki_protected_exports_* || true
           sed -i 's/ -dirty//g' common/scripts/setlocalversion 2>/dev/null || true
@@ -173,7 +167,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: common
-          key: pantah-kernel-v2-15260412
+          key: pantah-kernel-v3-15260412
 
       - name: Check Toolchains Cache
         id: toolchain_cache
@@ -319,7 +313,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: pantah-kernel-v2-15260412
+          key: pantah-kernel-v3-15260412
 
       - name: Ensure Kernel Source Present
         run: |
@@ -341,11 +335,6 @@ jobs:
               cp -a temp_pantah/. common/
             fi
             rm -rf temp_pantah
-
-            # Inject GS201 defconfig
-            curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
-              -o common/arch/arm64/configs/gki_defconfig
-            cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/gs201_defconfig
 
             # Clean dirty suffix & remove ABI limitations
             rm -f common/android/abi_gki_protected_exports_* || true
