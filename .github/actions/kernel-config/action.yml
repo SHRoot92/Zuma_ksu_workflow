@@ -109,6 +109,7 @@ runs:
           cat >> "$DEFCONFIG" <<-'EOF'
         CONFIG_KSU=y
         CONFIG_KSU_LSM_SECURITY_HOOKS=n
+        CONFIG_KSU_HOSTSREDIRECT=y
         EOF
         elif [ "$HOOK_MODE" = "lsm" ]; then
           cat >> "$DEFCONFIG" <<-'EOF'
@@ -116,6 +117,7 @@ runs:
         CONFIG_KSU_LSM_SECURITY_HOOKS=y
         CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
         CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
+        CONFIG_KSU_HOSTSREDIRECT=y
         EOF
         fi
 
