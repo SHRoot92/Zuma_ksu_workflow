@@ -6,13 +6,13 @@ on:
     - cron: '0 20 * * *'
   workflow_dispatch:
     inputs:
-      keep_runs_count:
-        description: 'Number of recent workflow runs to keep per workflow'
+      keep_success_count:
+        description: 'Number of recent SUCCESSFUL workflow runs to keep'
         required: false
         type: number
         default: 5
       clean_stale_cache:
-        description: 'Prune stale GitHub Actions caches'
+        description: 'Prune stale GitHub Actions caches (older than 7 days)'
         required: false
         type: boolean
         default: true
@@ -29,19 +29,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Prune Workflow Runs
+      - name: Prune Workflow Runs (Option B)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          KEEP_COUNT: ${{ github.event.inputs.keep_runs_count || 5 }}
+          KEEP_SUCCESS_COUNT: ${{ github.event.inputs.keep_success_count || 5 }}
         run: |
           set -e
-          echo "🧹 Starting automated cleanup of GitHub Actions workflow runs..."
+          echo "🧹 Starting automated cleanup of GitHub Actions workflow runs (Strategy: Option B)..."
+          NOW=$(date +%s)
           
           # Fetch all workflows in the repo
           WORKFLOWS=$(gh workflow list --json id,name,path -q '.[] | @base64')
           
-          TOTAL_DELETED=0
+          TOTAL_SUCCESS_DELETED=0
+          TOTAL_FAILED_DELETED=0
           
           for wf_b64 in $WORKFLOWS; do
             wf_json=$(echo "$wf_b64" | base64 -d)
@@ -51,29 +53,52 @@ jobs:
             
             echo "🔍 Inspecting runs for workflow: $wf_name ($wf_file)..."
             
-            # If check-upstream, keep at most 5 runs; for builds, use KEEP_COUNT
+            # 1. Prune Successful Runs beyond keep limit
             if [ "$wf_file" = "check-upstream-updates.yml" ]; then
               LIMIT_KEEP=5
             else
-              LIMIT_KEEP=$KEEP_COUNT
+              LIMIT_KEEP=$KEEP_SUCCESS_COUNT
             fi
             
-            # Find run IDs beyond the keep limit
-            OLD_RUNS=$(gh run list --workflow="$wf_file" --json databaseId,status -q               ".[] | select(.status==\"completed\") | .databaseId" | tail -n +$((LIMIT_KEEP + 1)) || true)
+            OLD_SUCCESS_RUNS=$(gh run list --workflow="$wf_file" --json databaseId,status,conclusion -q               ".[] | select(.status==\"completed\" and .conclusion==\"success\") | .databaseId" | tail -n +$((LIMIT_KEEP + 1)) || true)
             
-            if [ -n "$OLD_RUNS" ]; then
-              echo "🗑️ Deleting older completed runs for $wf_name:"
-              for run_id in $OLD_RUNS; do
-                echo "   - Deleting run ID: $run_id"
-                gh run delete "$run_id" || echo "   ⚠️ Failed to delete $run_id, skipping"
-                TOTAL_DELETED=$((TOTAL_DELETED + 1))
+            if [ -n "$OLD_SUCCESS_RUNS" ]; then
+              echo "   🗑️ Deleting older successful runs (> $LIMIT_KEEP):"
+              for run_id in $OLD_SUCCESS_RUNS; do
+                echo "      - Deleting success run: $run_id"
+                gh run delete "$run_id" || echo "      ⚠️ Failed to delete $run_id, skipping"
+                TOTAL_SUCCESS_DELETED=$((TOTAL_SUCCESS_DELETED + 1))
               done
             else
-              echo "   ✅ Runs count is within threshold (keeping latest $LIMIT_KEEP runs)."
+              echo "   ✅ Successful runs count is within threshold (keeping latest $LIMIT_KEEP)."
+            fi
+            
+            # 2. Prune Failed / Cancelled / Timed_out runs older than 24 hours (86400s)
+            FAILED_RUNS_JSON=$(gh run list --workflow="$wf_file" --json databaseId,status,conclusion,createdAt --limit 100               -q ".[] | select(.status==\"completed\" and .conclusion!=\"success\")" || echo "")
+            
+            if [ -n "$FAILED_RUNS_JSON" ]; then
+              echo "$FAILED_RUNS_JSON" | jq -c '.' | while read -r item; do
+                [ -z "$item" ] && continue
+                f_id=$(echo "$item" | jq -r .databaseId)
+                f_concl=$(echo "$item" | jq -r .conclusion)
+                f_date=$(echo "$item" | jq -r .createdAt)
+                
+                f_ts=$(date -d "$f_date" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$f_date" +%s 2>/dev/null || echo "$NOW")
+                age_hours=$(( (NOW - f_ts) / 3600 ))
+                
+                if [ "$age_hours" -ge 24 ]; then
+                  echo "   🗑️ Deleting $f_concl run (age: ${age_hours}h >= 24h): ID $f_id"
+                  gh run delete "$f_id" || echo "   ⚠️ Failed to delete $f_id, skipping"
+                  TOTAL_FAILED_DELETED=$((TOTAL_FAILED_DELETED + 1))
+                else
+                  echo "   🛡️ Preserving recent $f_concl run (age: ${age_hours}h < 24h for inspection): ID $f_id"
+                fi
+              done
             fi
           done
           
-          echo "total_runs_deleted=$TOTAL_DELETED" >> "$GITHUB_ENV"
+          echo "total_success_deleted=$TOTAL_SUCCESS_DELETED" >> "$GITHUB_ENV"
+          echo "total_failed_deleted=$TOTAL_FAILED_DELETED" >> "$GITHUB_ENV"
 
       - name: Prune Stale Actions Caches
         if: github.event.inputs.clean_stale_cache != 'false'
@@ -84,15 +109,15 @@ jobs:
           set -e
           echo "🧹 Inspecting GitHub Actions caches..."
           
-          # List all caches and find any older than 7 days (or duplicated keys)
+          # List all caches and find any older than 7 days (604800 seconds)
           CACHES=$(gh cache list --json id,key,createdAt,sizeInBytes -q '.[]' 2>/dev/null || echo "")
           
           CACHE_DELETED=0
           if [ -n "$CACHES" ]; then
-            # Delete caches older than 7 days (604800 seconds)
             NOW=$(date +%s)
             
             gh cache list --json id,key,createdAt --limit 100 | jq -c '.[]' | while read -r cache_item; do
+              [ -z "$cache_item" ] && continue
               cache_id=$(echo "$cache_item" | jq -r .id)
               cache_key=$(echo "$cache_item" | jq -r .key)
               created_at=$(echo "$cache_item" | jq -r .createdAt)
@@ -114,8 +139,9 @@ jobs:
 
       - name: Generate Cleanup Report
         run: |
-          echo "### 🧹 Automated Actions Cleanup Report" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧹 Automated Actions Cleanup Report (Strategy: Option B)" >> $GITHUB_STEP_SUMMARY
           echo "- **Execution Time**: \`$(date -u +'%Y-%m-%d %H:%M:%S UTC')\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Workflow Runs Pruned**: \`${{ env.total_runs_deleted || 0 }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Stale Caches Cleaned**: \`${{ env.total_caches_deleted || 0 }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Successful Runs Pruned (> 5)**: \`${{ env.total_success_deleted || 0 }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Failed/Cancelled Runs Pruned (> 24h)**: \`${{ env.total_failed_deleted || 0 }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stale Caches Cleaned (> 7d)**: \`${{ env.total_caches_deleted || 0 }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Protected Artifacts**: Releases & Tags are 100% preserved." >> $GITHUB_STEP_SUMMARY
