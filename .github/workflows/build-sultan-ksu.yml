@@ -268,9 +268,14 @@ jobs:
           # Get kernel version
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
-          KERNEL_VER="${V_MAJOR}.${V_PATCH}"
-          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = "." ]; then
-            KERNEL_VER="6.1"
+          V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}')
+          if [ -n "$V_SUB" ]; then
+            KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
+          else
+            KERNEL_VER="${V_MAJOR}.${V_PATCH}"
+          fi
+          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = ".." ]; then
+            KERNEL_VER="6.1.162"
           fi
           
           # Get SuSFS version
@@ -767,9 +772,14 @@ jobs:
           # Get kernel version
           V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
           V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
-          KERNEL_VER="${V_MAJOR}.${V_PATCH}"
-          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = "." ]; then
-            KERNEL_VER="6.1"
+          V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}')
+          if [ -n "$V_SUB" ]; then
+            KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
+          else
+            KERNEL_VER="${V_MAJOR}.${V_PATCH}"
+          fi
+          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = ".." ]; then
+            KERNEL_VER="6.1.162"
           fi
           
           # Get SuSFS version
