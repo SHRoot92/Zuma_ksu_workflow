@@ -422,6 +422,8 @@ jobs:
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           echo "Integrating KernelSU ($KSU_BRANCH)..."
           git clone --depth=1 --branch="$KSU_BRANCH" https://github.com/${{ env.KSU_REPO }}.git KernelSU
+          KSU_COMMIT=$(git -C KernelSU rev-parse --short HEAD 2>/dev/null || echo "")
+          echo "KSU_COMMIT=$KSU_COMMIT" >> "$GITHUB_ENV"
           ln -sf ../KernelSU/kernel drivers/kernelsu
 
           grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
@@ -564,6 +566,7 @@ jobs:
           echo "KERNEL_VER='${KERNEL_VER}'" > ./output_artifacts/build_metadata.env
           echo "KERNEL_VER_FULL='${KERNEL_VER}'" >> ./output_artifacts/build_metadata.env
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
+          echo "KSU_COMMIT='${KSU_COMMIT}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
           if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
             echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
@@ -639,6 +642,7 @@ jobs:
             echo "KERNEL_VER=${KERNEL_VER}" >> "$GITHUB_ENV"
             echo "KERNEL_VER_FULL=${KERNEL_VER_FULL}" >> "$GITHUB_ENV"
             echo "KSU_VER=${KSU_VER}" >> "$GITHUB_ENV"
+            echo "KSU_COMMIT=${KSU_COMMIT}" >> "$GITHUB_ENV"
             echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> "$GITHUB_ENV"
             echo "SUSFS_VER=${SUSFS_VER}" >> "$GITHUB_ENV"
             echo "SUSFS_COMMIT=${SUSFS_COMMIT}" >> "$GITHUB_ENV"
@@ -678,7 +682,11 @@ jobs:
 
           echo "- 📅 **Build Timestamp**: \`${DATE} ${TIME} (UTC)\`" >> release_note.md
           echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\`" >> release_note.md
-          echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
+          if [ -n "${KSU_COMMIT}" ]; then
+            echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\` @ \`${KSU_COMMIT}\`)" >> release_note.md
+          else
+            echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
+          fi
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
             if [ -n "${SUSFS_COMMIT}" ]; then
               echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v} (${SUSFS_COMMIT})\` (GKI android14-6.1)" >> release_note.md

@@ -330,6 +330,9 @@ jobs:
           }
           rm -f "$SETUP_SCRIPT"
           
+          KSU_COMMIT=$(git -C KernelSU rev-parse --short HEAD 2>/dev/null || echo "")
+          echo "KSU_COMMIT=$KSU_COMMIT" >> "$GITHUB_ENV"
+          
           echo "📋 Applying Sultan kernel patches..."
           PATCHES=(
             "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
@@ -531,6 +534,7 @@ jobs:
           {
             echo "KERNEL_VER='${KERNEL_VER}'"
             echo "KSU_VER='${K_VER}'"
+            echo "KSU_COMMIT='${KSU_COMMIT}'"
             echo "S_TAG='${S_TAG}'"
             echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'"
             if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
@@ -834,6 +838,9 @@ jobs:
           }
           rm -f "$SETUP_SCRIPT"
           
+          KSU_COMMIT=$(git -C KernelSU rev-parse --short HEAD 2>/dev/null || echo "")
+          echo "KSU_COMMIT=$KSU_COMMIT" >> "$GITHUB_ENV"
+          
           echo "📋 Applying Sultan kernel patches..."
           PATCHES=(
             "../kernel_patches/sultan/60_scripts_mkcompile_h.patch"
@@ -1011,6 +1018,7 @@ jobs:
           {
             echo "KERNEL_VER='${KERNEL_VER}'"
             echo "KSU_VER='${K_VER}'"
+            echo "KSU_COMMIT='${KSU_COMMIT}'"
             echo "S_TAG='${S_TAG}'"
             echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'"
             if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
@@ -1120,6 +1128,11 @@ jobs:
           else
             SUSFS_DISPLAY="\`v${SUSFS_VER#v}\`"
           fi
+          if [ -n "$KSU_COMMIT" ]; then
+            KSU_DISPLAY="\`$KSU_BRANCH\` (v\`$KSU_VER\` @ \`$KSU_COMMIT\`)"
+          else
+            KSU_DISPLAY="\`$KSU_BRANCH\` (+$KSU_VER)"
+          fi
           TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
           KERNEL_VER="${KERNEL_VER:-6.1}"
           KSU_VER="${KSU_VER:-unknown}"
@@ -1143,7 +1156,7 @@ jobs:
             echo "| :--- | :--- |"
             echo "| **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
             echo "| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |"
-            echo "| **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |"
+            echo "| **KernelSU Branch** | $KSU_DISPLAY |"
             echo "| **SuSFS Version** | $SUSFS_DISPLAY |"
             echo "| **Compiler** | $TOOLCHAIN_DISPLAY |"
             echo "| **Build Date** | $BUILD_TIME |"
