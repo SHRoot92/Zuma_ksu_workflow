@@ -126,7 +126,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: gki-kernel-clean-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
 
       - name: Download & Prepare Source (on cache miss)
         if: steps.source_cache.outputs.cache-hit != 'true'
@@ -187,7 +187,7 @@ jobs:
             rm -f common.tar.gz
           fi
 
-          if [ ! -f "common/Makefile" ] || [ ! -d "common/drivers" ]; then
+          if [ ! -f "common/Makefile" ] || [ ! -d "common/arch/arm64" ] || [ ! -d "common/drivers" ]; then
             echo "❌ ERROR: Kernel source tree invalid in common/:"
             ls -la common
             exit 1
@@ -197,6 +197,7 @@ jobs:
           echo "Injecting Tensor G2 (gs201) defconfig..."
           curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
             -o common/arch/arm64/configs/gki_defconfig
+          cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/gs201_defconfig
 
           # Clean dirty suffix & remove ABI limitations
           rm -f common/android/abi_gki_protected_exports_* || true
@@ -210,13 +211,14 @@ jobs:
 
           echo "✅ Kernel source prepared successfully:"
           head -n 6 common/Makefile
+          ls -la common/arch/arm64/configs/gki_defconfig
 
       - name: Save Clean Kernel Source Cache
         if: steps.source_cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: common
-          key: gki-kernel-clean-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
 
       - name: Check Toolchains Cache
         id: toolchain_cache
@@ -362,11 +364,11 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: common
-          key: gki-kernel-clean-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
+          key: gki-kernel-v2-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
 
       - name: Ensure Kernel Source Present
         run: |
-          if [ ! -f "common/Makefile" ]; then
+          if [ ! -f "common/Makefile" ] || [ ! -f "common/arch/arm64/configs/gki_defconfig" ]; then
             echo "⚡ Cache miss fallback: Downloading and extracting kernel source..."
             mkdir -p common
             GKI_VER="${{ github.event.inputs.gki_version || 'pantah-15260412' }}"
@@ -376,7 +378,15 @@ jobs:
               mkdir -p temp_pantah
               tar -xf pantah.tar.xz -C temp_pantah
               rm -f pantah.tar.xz
-              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+              if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
+                cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+              elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
+                cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
+              elif [ -d "temp_pantah/common/ack" ]; then
+                cp -a temp_pantah/common/ack/. common/
+              elif [ -f "temp_pantah/Makefile" ]; then
+                cp -a temp_pantah/. common/
+              fi
               rm -rf temp_pantah
             elif [ "$GKI_VER" = "pantah-14810637" ]; then
               ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/kernel-pantah-14810637/kernel-pantah-14810637.tar.gz"
@@ -411,6 +421,7 @@ jobs:
             # Inject GS201 defconfig
             curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
               -o common/arch/arm64/configs/gki_defconfig
+            cp common/arch/arm64/configs/gki_defconfig common/arch/arm64/configs/gs201_defconfig
 
             # Clean dirty suffix & remove ABI limitations
             rm -f common/android/abi_gki_protected_exports_* || true
@@ -419,13 +430,14 @@ jobs:
             sed -i 's/check_defconfig//' common/build.config.gki 2>/dev/null || true
           fi
 
-          if [ ! -f "common/Makefile" ] || [ ! -d "common/drivers" ]; then
+          if [ ! -f "common/Makefile" ] || [ ! -f "common/arch/arm64/configs/gki_defconfig" ] || [ ! -d "common/drivers" ]; then
             echo "❌ ERROR: Kernel source tree invalid in common/:"
             ls -la common
             exit 1
           fi
           echo "✅ Kernel source verified in common/:"
           head -n 6 common/Makefile
+          ls -la common/arch/arm64/configs/gki_defconfig
 
       - name: Clone Aux Repos
         run: |
