@@ -96,7 +96,28 @@ jobs:
   prepare_source:
     name: Prepare Kernel Source
     runs-on: ubuntu-latest
+    outputs:
+      hook_matrix: ${{ steps.matrix_calc.outputs.hook_matrix }}
+      susfs_matrix: ${{ steps.matrix_calc.outputs.susfs_matrix }}
     steps:
+      - name: Calculate Dynamic Matrix
+        id: matrix_calc
+        run: |
+          HOOK_INPUT="${{ github.event.inputs.hook_mode || 'all' }}"
+          SUSFS_INPUT="${{ github.event.inputs.enable_susfs || 'all' }}"
+
+          if [ "$HOOK_INPUT" = "all" ]; then
+            echo 'hook_matrix=["manual", "lsm"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "hook_matrix=[\"$HOOK_INPUT\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$SUSFS_INPUT" = "all" ]; then
+            echo 'susfs_matrix=["true", "false"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "susfs_matrix=[\"$SUSFS_INPUT\"]" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -160,7 +181,8 @@ jobs:
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
             echo "Downloading from: $ARCHIVE_URL"
-            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz ||             aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+            aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
             tar -xzf common.tar.gz -C common
             rm -f common.tar.gz
           fi
@@ -173,7 +195,8 @@ jobs:
 
           # Inject Google Tensor GS201 defconfig
           echo "Injecting Tensor G2 (gs201) defconfig..."
-          curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig"             -o common/arch/arm64/configs/gki_defconfig
+          curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
+            -o common/arch/arm64/configs/gki_defconfig
 
           # Clean dirty suffix & remove ABI limitations
           rm -f common/android/abi_gki_protected_exports_* || true
@@ -205,11 +228,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        hook_mode: [manual, lsm]
-        enable_susfs: [true, false]
-        exclude:
-          - hook_mode: ${{ github.event.inputs.hook_mode == 'manual' && 'lsm' || (github.event.inputs.hook_mode == 'lsm' && 'manual' || '') }}
-          - enable_susfs: ${{ github.event.inputs.enable_susfs == 'true' && false || (github.event.inputs.enable_susfs == 'false' && true || '') }}
+        hook_mode: ${{ fromJson(needs.prepare_source.outputs.hook_matrix) }}
+        enable_susfs: ${{ fromJson(needs.prepare_source.outputs.susfs_matrix) }}
 
     steps:
       - name: Checkout repository
