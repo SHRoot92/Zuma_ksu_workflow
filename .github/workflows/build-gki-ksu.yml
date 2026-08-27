@@ -1,4 +1,4 @@
-name: Build Google Pantah (Pixel 7/Pro) Kernel + xxKSU
+name: Build Google Pantah (Pixel 7/Pro) Kernel + KernelSU
 
 on:
   workflow_dispatch:
@@ -412,7 +412,7 @@ jobs:
         run: |
           cd common
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
-          echo "Integrating xxKSU ($KSU_BRANCH)..."
+          echo "Integrating KernelSU ($KSU_BRANCH)..."
           git clone --depth=1 --branch="$KSU_BRANCH" https://github.com/${{ env.KSU_REPO }}.git KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
 
@@ -524,7 +524,7 @@ jobs:
           DATE=$(date +"%y%m%d")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
-          KERNEL_VER="${{ steps.meta.outputs.kernel_ver }}"
+          KERNEL_VER="${{ steps.meta.outputs.kernel_ver_full }}"
           SUSFS_VER="${{ steps.meta.outputs.susfs_ver }}"
 
           if [ "$KSU_BRANCH" = "staging" ]; then
@@ -539,7 +539,7 @@ jobs:
             SUSFS_TAG=""
           fi
 
-          BASE_NAME="KSU_GKI_gs201_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-${{ matrix.hook_mode }}${SUSFS_TAG}-${DATE}"
+          BASE_NAME="KernelSU_Pantah_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-${{ matrix.hook_mode }}${SUSFS_TAG}-${DATE}"
           ZIP_NAME="${BASE_NAME}.zip"
 
           echo "Packaging AnyKernel3: $ZIP_NAME"
@@ -550,6 +550,7 @@ jobs:
 
           TOOLCHAIN_DISPLAY="${{ steps.meta.outputs.toolchain_display }}"
           echo "KERNEL_VER='${KERNEL_VER}'" > ./output_artifacts/build_metadata.env
+          echo "KERNEL_VER_FULL='${KERNEL_VER}'" >> ./output_artifacts/build_metadata.env
           echo "KSU_VER='${K_VER}'" >> ./output_artifacts/build_metadata.env
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
           if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
@@ -613,6 +614,7 @@ jobs:
           if [ -f "$META_FILE" ]; then
             source "$META_FILE"
             echo "KERNEL_VER=${KERNEL_VER}" >> "$GITHUB_ENV"
+            echo "KERNEL_VER_FULL=${KERNEL_VER_FULL}" >> "$GITHUB_ENV"
             echo "KSU_VER=${KSU_VER}" >> "$GITHUB_ENV"
             echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> "$GITHUB_ENV"
             echo "SUSFS_VER=${SUSFS_VER}" >> "$GITHUB_ENV"
@@ -691,8 +693,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "pantah-6.1-ksu-v${{ env.KSU_VER || 'latest' }}-r${{ github.run_number }}"
-          name: "🔥 Google Pixel 7/Pro (Pantah) • Linux ${{ env.KERNEL_VER_FULL || '6.1.162' }} • xxKSU v${{ env.KSU_VER || 'latest' }} + SuSFS v${{ env.SUSFS_VER || 'latest' }}"
+          tag_name: "pantah-${{ env.KERNEL_VER_FULL || '6.1.162' }}-ksu-v${{ env.KSU_VER || 'latest' }}-r${{ github.run_number }}"
+          name: "🔥 Google Pixel 7/Pro (Pantah) • Linux ${{ env.KERNEL_VER_FULL || '6.1.162' }} • KernelSU v${{ env.KSU_VER || 'latest' }} + SuSFS v${{ env.SUSFS_VER || 'latest' }}"
           body_path: release_note.md
           files: release_files/*.zip
           draft: false
