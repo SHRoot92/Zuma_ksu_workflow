@@ -341,8 +341,9 @@ jobs:
             echo "✅ Applied: $(basename $patch)"
           done
           
-          # ⚡ GCC LTO Optimization (Enable all CPU cores for LTO link)
+          # ⚡ GCC LTO Optimization (Disable single-threaded -fipa-pta and enable multi-core -flto=auto)
           sed -i 's/-flto=jobserver/-flto=auto/g' Makefile
+          sed -i 's/-fipa-pta//g' Makefile
           sed -i 's/\$(call if_changed_rule,ld_vmlinux.o)/+\$(call if_changed_rule,ld_vmlinux.o)/g' scripts/Makefile.vmlinux_o 2>/dev/null || true
           sed -i 's/\$(Q)\$(MAKE) -f \$(srctree)\/scripts\/Makefile.vmlinux_o/+\$(Q)\$(MAKE) -f \$(srctree)\/scripts\/Makefile.vmlinux_o/g' Makefile 2>/dev/null || true
 
@@ -839,8 +840,9 @@ jobs:
             echo "✅ Applied: $(basename $patch)"
           done
           
-          # ⚡ GCC LTO Optimization (Enable all CPU cores for LTO link)
+          # ⚡ GCC LTO Optimization (Disable single-threaded -fipa-pta and enable multi-core -flto=auto)
           sed -i 's/-flto=jobserver/-flto=auto/g' Makefile
+          sed -i 's/-fipa-pta//g' Makefile
           sed -i 's/\$(call if_changed_rule,ld_vmlinux.o)/+\$(call if_changed_rule,ld_vmlinux.o)/g' scripts/Makefile.vmlinux_o 2>/dev/null || true
           sed -i 's/\$(Q)\$(MAKE) -f \$(srctree)\/scripts\/Makefile.vmlinux_o/+\$(Q)\$(MAKE) -f \$(srctree)\/scripts\/Makefile.vmlinux_o/g' Makefile 2>/dev/null || true
 
