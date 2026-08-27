@@ -539,7 +539,7 @@ jobs:
             SUSFS_TAG=""
           fi
 
-          BASE_NAME="KernelSU_Pantah_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-${{ matrix.hook_mode }}${SUSFS_TAG}-${DATE}"
+          BASE_NAME="KSU_Pantah_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-${{ matrix.hook_mode }}${SUSFS_TAG}-${DATE}"
           ZIP_NAME="${BASE_NAME}.zip"
 
           echo "Packaging AnyKernel3: $ZIP_NAME"
