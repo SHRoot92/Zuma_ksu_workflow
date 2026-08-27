@@ -673,7 +673,7 @@ jobs:
           echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\`" >> release_note.md
           echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
-            echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER}\` (GKI android14-6.1)" >> release_note.md
+            echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v}\` (GKI android14-6.1)" >> release_note.md
           fi
           echo "- ⚙️ **Compiler Toolchain**: \`${TOOLCHAIN_DISPLAY:-Clang 17.0.6 + GCC 14.2}\`" >> release_note.md
           echo "- 🏷️ **Kernel Suffix**: \`${{ env.KERNEL_NAME }}\`" >> release_note.md
