@@ -295,7 +295,7 @@ jobs:
 
           GCC32_DIR="${{ github.workspace }}/toolchains/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf"
 
-          echo "CLANG_PATH=$CLANG_DIR/bin/" >> "$GITHUB_ENV"
+          echo "CLANG_PATH=$CLANG_DIR/bin" >> "$GITHUB_ENV"
           echo "TOOLCHAIN_PATH=$GCC64_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
           echo "$CLANG_DIR/bin" >> "$GITHUB_PATH"
           echo "$GCC64_DIR/bin" >> "$GITHUB_PATH"
@@ -306,7 +306,15 @@ jobs:
 
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             ccache -M 15G
-            ccache -z
+            CCACHE_BIN="${{ github.workspace }}/.ccache-bin"
+            mkdir -p "$CCACHE_BIN"
+            ln -sf $(which ccache) "$CCACHE_BIN/clang"
+            ln -sf $(which ccache) "$CCACHE_BIN/clang++"
+            ln -sf $(which ccache) "$CCACHE_BIN/gcc"
+            ln -sf $(which ccache) "$CCACHE_BIN/g++"
+            ln -sf $(which ccache) "$CCACHE_BIN/aarch64-none-linux-gnu-gcc"
+            echo "$CCACHE_BIN" >> "$GITHUB_PATH"
+            echo "CCACHE_BIN_DIR=$CCACHE_BIN" >> "$GITHUB_ENV"
           fi
 
       - name: Restore Clean Kernel Source from Cache
@@ -486,7 +494,11 @@ jobs:
       - name: Build Kernel (Production)
         run: |
           cd common
-          export PATH="${CLANG_PATH}:${PATH}"
+          if [ -n "$CCACHE_BIN_DIR" ]; then
+            export PATH="${CCACHE_BIN_DIR}:${CLANG_PATH}:${PATH}"
+          else
+            export PATH="${CLANG_PATH}:${PATH}"
+          fi
           export KCFLAGS="-O2 -Wno-error"
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
@@ -576,6 +588,13 @@ jobs:
           name: GKI-${{ matrix.hook_mode }}-SUSFS_${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
           retention-days: 7
+
+      - name: Save Ccache
+        if: always() && github.event.inputs.use_ccache != 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: gki-ccache-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-${{ github.run_id }}
 
   # =========================================================================
   # STAGE 3: Unified Release Publisher
