@@ -683,7 +683,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "pantah-${{ env.KERNEL_VER_FULL || '6.1.162' }}-ksu-v${{ env.KSU_VER || 'latest' }}-r${{ github.run_number }}"
-          name: "🔥 Google Pixel 7/Pro (Pantah) • Linux ${{ env.KERNEL_VER_FULL || '6.1.162' }} • KernelSU v${{ env.KSU_VER || 'latest' }} + SuSFS v${{ env.SUSFS_VER || 'latest' }}"
+          name: "Pixel 7/Pro (Pantah) Kernel ${{ env.KERNEL_VER_FULL || '6.1.162' }} - KernelSU"
           body_path: release_note.md
           files: release_files/*.zip
           draft: false
