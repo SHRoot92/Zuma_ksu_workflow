@@ -451,23 +451,22 @@ jobs:
 
       - name: Metadata & Sanitization
         id: meta
-        working-directory: common
         run: |
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
-          K_VER=$(../sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
+          K_VER=$(./sh/get_ksuver.sh "backslashxx" "KernelSU" "$KSU_BRANCH" || echo "unknown")
 
           RAW_CLANG_STR=$("${CLANG_PATH}clang" --version 2>&1 | head -n1)
           TOOLCHAIN_DISPLAY="$RAW_CLANG_STR"
 
-          V_MAJOR=$(grep -E '^VERSION =' Makefile | awk '{print $3}' | tr -d '\r')
-          V_PATCH=$(grep -E '^PATCHLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
-          V_SUB=$(grep -E '^SUBLEVEL =' Makefile | awk '{print $3}' | tr -d '\r')
+          V_MAJOR=$(grep -E '^VERSION =' common/Makefile | awk '{print $3}' | tr -d '\r')
+          V_PATCH=$(grep -E '^PATCHLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
+          V_SUB=$(grep -E '^SUBLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
           KERNEL_VER="${V_MAJOR}.${V_PATCH}"
           KERNEL_VER_FULL="${V_MAJOR}.${V_PATCH}.${V_SUB:-0}"
 
           SUSFS_VER="unknown"
-          if [ -f "../susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
-            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' ../susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}')
+          if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
+            SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}')
           fi
 
           echo "ksu_ver=$K_VER" >> "$GITHUB_OUTPUT"
@@ -486,16 +485,16 @@ jobs:
           echo "======================================"
 
       - name: Integrate KernelSU
-        working-directory: common
         run: |
+          cd common
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
           echo "Integrating xxKSU ($KSU_BRANCH)..."
           git clone --depth=1 --branch="$KSU_BRANCH" https://github.com/${{ env.KSU_REPO }}.git KernelSU
           ln -sf ../KernelSU/kernel drivers/kernelsu
 
-          grep -q "kernelsu" drivers/Makefile ||             echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          grep -q "kernelsu" drivers/Makefile || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
 
-          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig ||             sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
           K_VER="${{ steps.meta.outputs.ksu_ver }}"
           KSU_MAKEFILE="drivers/kernelsu/Makefile"
@@ -506,16 +505,16 @@ jobs:
 
       - name: Apply Hook Patches
         if: matrix.hook_mode == 'manual'
-        working-directory: common
         run: |
+          cd common
           echo "Applying manual security hooks patches for GKI..."
           patch -p1 -l < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch" || true
-          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" ||           patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" || patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
-        working-directory: common
         run: |
+          cd common
           echo "Applying SuSFS patches (GKI Android 14 6.1)..."
           cp ../susfs4ksu/kernel_patches/fs/susfs.c fs/
           cp ../susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
@@ -526,14 +525,9 @@ jobs:
           ( cd KernelSU && patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" )
 
       - name: Generate Defconfig
-        working-directory: common
         run: |
-          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
-            CC_CMD="ccache ${CLANG_PATH}clang"
-          else
-            CC_CMD="${CLANG_PATH}clang"
-          fi
-
+          cd common
+          export PATH="${CLANG_PATH}:${PATH}"
           export KCFLAGS="-O2 -Wno-error"
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
@@ -541,18 +535,11 @@ jobs:
           export KBUILD_GENDWARFKSYMS_STABLE=1
           export HOSTCC=gcc
           export HOSTCXX=g++
-          export CC="$CC_CMD"
+          export CC=clang
           export CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}"
 
-          echo "⚙️ Generating GKI defconfig with CC: $CC_CMD..."
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CC="$CC_CMD" CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" O=out gki_defconfig || \
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CC="$CC_CMD" CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" O=out defconfig KBUILD_DEFCONFIG=gki_defconfig || \
-          {
-            echo "Fallback creating out/.config and out/Makefile..."
-            mkdir -p out
-            cp arch/arm64/configs/gki_defconfig out/.config
-            printf "# Automatically generated by kbuild\ninclude ../Makefile\n" > out/Makefile
-          }
+          echo "⚙️ Generating GKI defconfig..."
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out gki_defconfig
           if [ ! -f "out/.config" ]; then
             echo "❌ ERROR: Defconfig generation failed - out/.config not found"
             exit 1
@@ -567,14 +554,9 @@ jobs:
           enable_susfs: "${{ matrix.enable_susfs }}"
 
       - name: Finalize Defconfig
-        working-directory: common
         run: |
-          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
-            CC_CMD="ccache ${CLANG_PATH}clang"
-          else
-            CC_CMD="${CLANG_PATH}clang"
-          fi
-
+          cd common
+          export PATH="${CLANG_PATH}:${PATH}"
           export KCFLAGS="-O2 -Wno-error"
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
@@ -582,21 +564,16 @@ jobs:
           export KBUILD_GENDWARFKSYMS_STABLE=1
           export HOSTCC=gcc
           export HOSTCXX=g++
-          export CC="$CC_CMD"
+          export CC=clang
           export CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}"
 
           echo "Finalizing defconfig..."
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CC="$CC_CMD" CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" O=out olddefconfig 2>&1 | grep -v "warning: override" || true
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out olddefconfig 2>&1 | grep -v "warning: override" || true
 
       - name: Build Kernel (Production)
-        working-directory: common
         run: |
-          if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
-            CC_CMD="ccache ${CLANG_PATH}clang"
-          else
-            CC_CMD="${CLANG_PATH}clang"
-          fi
-
+          cd common
+          export PATH="${CLANG_PATH}:${PATH}"
           export KCFLAGS="-O2 -Wno-error"
           export KBUILD_BUILD_USER="build-user"
           export KBUILD_BUILD_HOST="build-host"
@@ -604,11 +581,11 @@ jobs:
           export KBUILD_GENDWARFKSYMS_STABLE=1
           export HOSTCC=gcc
           export HOSTCXX=g++
-          export CC="$CC_CMD"
+          export CC=clang
           export CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}"
 
-          echo "Compiling GKI kernel with CC: $CC_CMD"
-          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CC="$CC_CMD" CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}" O=out Image
+          echo "Compiling GKI kernel..."
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out Image
 
       - name: Ccache Performance Stats
         if: github.event.inputs.use_ccache != 'false'
