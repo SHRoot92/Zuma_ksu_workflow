@@ -221,14 +221,18 @@ jobs:
             mkdir -p temp_pantah
             tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
-            if [ -d "temp_pantah/common" ]; then
+            if [ -f "temp_pantah/kernel-pantah-15260412/common/ack/Makefile" ]; then
+              mv temp_pantah/kernel-pantah-15260412/common/ack/* common/
+            elif [ -f "temp_pantah/common/ack/Makefile" ]; then
+              mv temp_pantah/common/ack/* common/
+            elif [ -f "temp_pantah/kernel-pantah-15260412/common/Makefile" ]; then
+              mv temp_pantah/kernel-pantah-15260412/common/* common/
+            elif [ -f "temp_pantah/common/Makefile" ]; then
               mv temp_pantah/common/* common/
-            elif [ -d "temp_pantah/aosp" ]; then
-              mv temp_pantah/aosp/* common/
             elif [ -f "temp_pantah/Makefile" ]; then
               mv temp_pantah/* common/
             else
-              SRC_DIR=$(find temp_pantah -maxdepth 3 -name "Makefile" | grep -E "(common|aosp|kernel)" | head -n1 | xargs -r dirname)
+              SRC_DIR=$(find temp_pantah -name "Makefile" -path "*/arch/arm64/*" -prune -o -name "Makefile" -exec dirname {} \; | grep -E "(ack|common|aosp)" | head -n1)
               if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
                 mv "$SRC_DIR"/* common/
               else
@@ -583,14 +587,18 @@ jobs:
             mkdir -p temp_pantah
             tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
-            if [ -d "temp_pantah/common" ]; then
+            if [ -f "temp_pantah/kernel-pantah-15260412/common/ack/Makefile" ]; then
+              mv temp_pantah/kernel-pantah-15260412/common/ack/* common/
+            elif [ -f "temp_pantah/common/ack/Makefile" ]; then
+              mv temp_pantah/common/ack/* common/
+            elif [ -f "temp_pantah/kernel-pantah-15260412/common/Makefile" ]; then
+              mv temp_pantah/kernel-pantah-15260412/common/* common/
+            elif [ -f "temp_pantah/common/Makefile" ]; then
               mv temp_pantah/common/* common/
-            elif [ -d "temp_pantah/aosp" ]; then
-              mv temp_pantah/aosp/* common/
             elif [ -f "temp_pantah/Makefile" ]; then
               mv temp_pantah/* common/
             else
-              SRC_DIR=$(find temp_pantah -maxdepth 3 -name "Makefile" | grep -E "(common|aosp|kernel)" | head -n1 | xargs -r dirname)
+              SRC_DIR=$(find temp_pantah -name "Makefile" -path "*/arch/arm64/*" -prune -o -name "Makefile" -exec dirname {} \; | grep -E "(ack|common|aosp)" | head -n1)
               if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
                 mv "$SRC_DIR"/* common/
               else
