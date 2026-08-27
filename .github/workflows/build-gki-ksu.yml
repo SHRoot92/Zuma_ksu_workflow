@@ -218,6 +218,59 @@ jobs:
           path: common
           key: gki-kernel-clean-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
 
+      - name: Check Toolchains Cache
+        id: toolchain_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchains
+          key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
+
+      - name: Download & Prepare Toolchains (on cache miss)
+        if: steps.toolchain_cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p toolchains
+          # 1. LLVM Clang
+          CLANG_DIR="${{ github.workspace }}/toolchains/clang-${{ env.CLANG_VERSION }}"
+          if [ ! -f "$CLANG_DIR/bin/clang" ]; then
+            echo "⚡ Downloading LLVM Clang ${{ env.CLANG_VERSION }}..."
+            mkdir -p "$CLANG_DIR"
+            CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.CLANG_VERSION }}/clang+llvm-${{ env.CLANG_VERSION }}-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "$CLANG_URL" -o clang.tar.xz
+            tar -xJf clang.tar.xz -C "$CLANG_DIR" --strip-components=1
+            rm -f clang.tar.xz
+          fi
+
+          # 2. GCC 64-bit
+          GCC64_DIR="${{ github.workspace }}/toolchains/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          if [ ! -d "$GCC64_DIR/bin" ]; then
+            echo "⚡ Downloading GCC 64-bit ${{ env.ARM_TOOLCHAIN_VERSION }}..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
+            ARCHIVE64="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE64}" -o gcc64.tar.xz
+            tar -xf gcc64.tar.xz -C toolchains
+            rm -f gcc64.tar.xz
+          fi
+
+          # 3. GCC 32-bit
+          GCC32_DIR="${{ github.workspace }}/toolchains/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf"
+          if [ ! -d "$GCC32_DIR/bin" ]; then
+            echo "⚡ Downloading GCC 32-bit ${{ env.ARM_TOOLCHAIN_VERSION }}..."
+            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
+            ARCHIVE32="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf.tar.xz"
+            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE32}" -o gcc32.tar.xz || true
+            if [ -f "gcc32.tar.xz" ]; then
+              tar -xf gcc32.tar.xz -C toolchains || true
+              rm -f gcc32.tar.xz
+            fi
+          fi
+
+      - name: Save Toolchains Cache
+        if: steps.toolchain_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: toolchains
+          key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
+
   # =========================================================================
   # STAGE 2: Parallel Matrix Build (4 jobs, 0 downloads, instant source restore)
   # =========================================================================
@@ -242,66 +295,59 @@ jobs:
           sudo apt purge -y man-db || true
           sudo rm -rf /var/lib/man-db/auto-update || true
           sudo apt update
-          sudo apt install -y --no-install-recommends             ccache zstd aria2 libssl-dev libelf-dev bc bison flex make             gcc g++ pahole zip unzip tar xz-utils curl wget
+          sudo apt install -y --no-install-recommends \
+            ccache zstd aria2 libssl-dev libelf-dev bc bison flex make \
+            gcc g++ pahole zip unzip tar xz-utils curl wget
 
           sudo mkdir -p /dev/shm/ccache-temp
           sudo chmod 1777 /dev/shm/ccache-temp
           mkdir -p "${{ env.CCACHE_DIR }}"
           mkdir -p output_artifacts
 
-      - name: Restore Toolchain & Ccache
+      - name: Restore Ccache
+        if: github.event.inputs.use_ccache != 'false'
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ github.workspace }}/clang-${{ env.CLANG_VERSION }}
-            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu
-            ${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf
-          key: gki-toolchain-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-${{ github.run_id }}
+          path: ${{ env.CCACHE_DIR }}
+          key: gki-ccache-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-${{ github.run_id }}
           restore-keys: |
-            gki-toolchain-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-
-            gki-toolchain-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}-
+            gki-ccache-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-
+            gki-ccache-
 
-      - name: Install Clang & GCC Toolchains
+      - name: Restore Toolchains from Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchains
+          key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
+
+      - name: Configure Toolchains
         run: |
-          # 1. LLVM Clang
-          CLANG_DIR="${{ github.workspace }}/clang-${{ env.CLANG_VERSION }}"
+          CLANG_DIR="${{ github.workspace }}/toolchains/clang-${{ env.CLANG_VERSION }}"
           if [ ! -f "$CLANG_DIR/bin/clang" ]; then
-            echo "⚡ Downloading LLVM Clang ${{ env.CLANG_VERSION }}..."
+            echo "⚡ Fallback downloading Clang..."
             mkdir -p "$CLANG_DIR"
             CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.CLANG_VERSION }}/clang+llvm-${{ env.CLANG_VERSION }}-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
             aria2c -s 16 -x 16 -k 1M "$CLANG_URL" -o clang.tar.xz
             tar -xJf clang.tar.xz -C "$CLANG_DIR" --strip-components=1
             rm -f clang.tar.xz
           fi
-          echo "CLANG_PATH=$CLANG_DIR/bin/" >> "$GITHUB_ENV"
-          echo "$CLANG_DIR/bin" >> "$GITHUB_PATH"
 
-          # 2. GCC 64-bit
-          GCC64_DIR="${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
+          GCC64_DIR="${{ github.workspace }}/toolchains/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu"
           if [ ! -d "$GCC64_DIR/bin" ]; then
-            echo "⚡ Downloading GCC 64-bit ${{ env.ARM_TOOLCHAIN_VERSION }}..."
+            echo "⚡ Fallback downloading GCC 64-bit..."
             BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
             ARCHIVE64="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-aarch64-none-linux-gnu.tar.xz"
             aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE64}" -o gcc64.tar.xz
-            tar -xf gcc64.tar.xz
+            tar -xf gcc64.tar.xz -C toolchains
             rm -f gcc64.tar.xz
           fi
-          echo "TOOLCHAIN_PATH=$GCC64_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
-          echo "$GCC64_DIR/bin" >> "$GITHUB_PATH"
 
-          # 3. GCC 32-bit (for CONFIG_COMPAT)
-          GCC32_DIR="${{ github.workspace }}/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf"
-          if [ ! -d "$GCC32_DIR/bin" ]; then
-            echo "⚡ Downloading GCC 32-bit ${{ env.ARM_TOOLCHAIN_VERSION }}..."
-            BASE_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${{ env.ARM_TOOLCHAIN_VERSION }}/binrel/"
-            ARCHIVE32="arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf.tar.xz"
-            aria2c -s 16 -x 16 -k 1M "${BASE_URL}/${ARCHIVE32}" -o gcc32.tar.xz || true
-            if [ -f "gcc32.tar.xz" ]; then
-              tar -xf gcc32.tar.xz || true
-              rm -f gcc32.tar.xz
-            fi
-          fi
+          GCC32_DIR="${{ github.workspace }}/toolchains/arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN_VERSION }}-x86_64-arm-none-linux-gnueabihf"
+
+          echo "CLANG_PATH=$CLANG_DIR/bin/" >> "$GITHUB_ENV"
+          echo "TOOLCHAIN_PATH=$GCC64_DIR/bin/aarch64-none-linux-gnu-" >> "$GITHUB_ENV"
+          echo "$CLANG_DIR/bin" >> "$GITHUB_PATH"
+          echo "$GCC64_DIR/bin" >> "$GITHUB_PATH"
           if [ -d "$GCC32_DIR/bin" ]; then
             echo "GCC_ARM32_DIR=$GCC32_DIR/bin" >> "$GITHUB_ENV"
             echo "$GCC32_DIR/bin" >> "$GITHUB_PATH"
