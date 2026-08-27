@@ -16,19 +16,19 @@ on:
         required: true
         type: choice
         options:
-          - "all"
           - "manual"
           - "lsm"
-        default: "all"
+          - "all"
+        default: "manual"
       enable_susfs:
         description: "SuSFS Integration"
         required: true
         type: choice
         options:
-          - "all"
           - "true"
           - "false"
-        default: "all"
+          - "all"
+        default: "true"
       use_ccache:
         description: "Enable Ccache Acceleration"
         required: true
@@ -94,8 +94,8 @@ jobs:
       - name: Calculate Dynamic Matrix
         id: matrix_calc
         run: |
-          HOOK_INPUT="${{ github.event.inputs.hook_mode || 'all' }}"
-          SUSFS_INPUT="${{ github.event.inputs.enable_susfs || 'all' }}"
+          HOOK_INPUT="${{ github.event.inputs.hook_mode || 'manual' }}"
+          SUSFS_INPUT="${{ github.event.inputs.enable_susfs || 'true' }}"
 
           if [ "$HOOK_INPUT" = "all" ]; then
             echo 'hook_matrix=["manual", "lsm"]' >> "$GITHUB_OUTPUT"

@@ -16,19 +16,19 @@ on:
         required: true
         type: choice
         options:
-          - 'all'
           - 'manual'
           - 'lsm'
-        default: 'all'
+          - 'all'
+        default: 'manual'
       enable_susfs:
         description: 'SuSFS Integration'
         required: true
         type: choice
         options:
-          - 'all'
           - 'true'
           - 'false'
-        default: 'all'
+          - 'all'
+        default: 'true'
       use_ccache:
         description: 'Enable Ccache Acceleration'
         required: true
@@ -75,8 +75,8 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          SUSFS_INPUT="${{ github.event.inputs.enable_susfs }}"
-          if [ -z "$SUSFS_INPUT" ] || [ "$SUSFS_INPUT" = "all" ]; then
+          SUSFS_INPUT="${{ github.event.inputs.enable_susfs || 'true' }}"
+          if [ "$SUSFS_INPUT" = "all" ]; then
             echo "susfs_matrix=[\"true\", \"false\"]" >> "$GITHUB_OUTPUT"
           else
             echo "susfs_matrix=[\"$SUSFS_INPUT\"]" >> "$GITHUB_OUTPUT"
@@ -84,7 +84,7 @@ jobs:
 
   build_manual:
     name: Manual Hook (SUSFS=${{ matrix.enable_susfs }})
-    if: github.event.inputs.hook_mode == 'all' || github.event.inputs.hook_mode == 'manual' || github.event_name != 'workflow_dispatch'
+    if: github.event.inputs.hook_mode == 'all' || github.event.inputs.hook_mode == 'manual' || github.event.inputs.hook_mode == '' || github.event_name != 'workflow_dispatch'
     needs: matrix_prep
     runs-on: ubuntu-latest
     strategy:
