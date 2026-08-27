@@ -652,97 +652,58 @@ jobs:
         id: release_notes
         run: |
           DATE=$(date +"%Y-%m-%d")
-          TIME=$(date +"%H:%M:%S")
+          TIME=$(date -u +"%H:%M:%S UTC")
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
 
-          cat << "EOF" > release_note.md
-          # 🚀 Google Pixel 7 Series (Pantah) • KernelSU & SuSFS Production Release
-
-          > **Official Google ACK GS201 Source (Build 15260412)** • High-Performance Stealth Kernel Build
-
-          ---
-
-          ### 📱 Compatible Device Matrix (Tensor G2 / GS201)
-
-          | Device Model | Codename | SoC Platform | Compatibility |
-          | :--- | :--- | :--- | :---: |
-          | **Google Pixel 7** | `cheetah` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
-          | **Google Pixel 7 Pro** | `panther` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
-          | **Google Pixel 7a** | `lynx` | Tensor G2 (`gs201`) | 🌟 **Full Native** |
-          | **Google Pixel Fold** | `felix` | Tensor G2 (`gs201`) | ✅ **Compatible** |
-          | **Google Pixel Tablet** | `tangorpro` | Tensor G2 (`gs201`) | ✅ **Compatible** |
-
-          > **Supported OS**: Google Stock Android 14 / Android 15 (All QPRs), GrapheneOS, CalyxOS, LineageOS 21/22, and all GKI-compliant ROMs.
-
-          ---
-
-          ### 📦 Build & Toolchain Metadata
-
-          EOF
-
-          echo "- 📅 **Build Timestamp**: \`${DATE} ${TIME} (UTC)\`" >> release_note.md
-          echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\`" >> release_note.md
           if [ -n "${KSU_COMMIT}" ]; then
-            echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\` @ \`${KSU_COMMIT}\`)" >> release_note.md
+            KSU_DISPLAY="\`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\` @ \`${KSU_COMMIT}\`)"
           else
-            echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
+            KSU_DISPLAY="\`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)"
           fi
+
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
             if [ -n "${SUSFS_COMMIT}" ]; then
-              echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v} (${SUSFS_COMMIT})\` (GKI android14-6.1)" >> release_note.md
+              SUSFS_DISPLAY="\`v${SUSFS_VER#v} (${SUSFS_COMMIT})\` (GKI android14-6.1)"
             else
-              echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v}\` (GKI android14-6.1)" >> release_note.md
+              SUSFS_DISPLAY="\`v${SUSFS_VER#v}\` (GKI android14-6.1)"
             fi
+          else
+            SUSFS_DISPLAY="\`v2.2.0\` (GKI android14-6.1)"
           fi
-          echo "- ⚙️ **Compiler Toolchain**: \`${TOOLCHAIN_DISPLAY:-Clang 17.0.6 + GCC 14.2}\`" >> release_note.md
-          echo "- 🏷️ **Kernel Suffix**: \`${{ env.KERNEL_NAME }}\`" >> release_note.md
 
-          cat << "EOF" >> release_note.md
-
-          ---
-
-          ### 🚀 Flashable Packages Included
-
-          | Package Name Pattern | Hook Mechanism | SuSFS Stealth | Recommended Scenario |
-          | :--- | :---: | :---: | :--- |
-          | `*manual-SUSFS_true*.zip` | **Manual Hook** | ✅ **Enabled** | 🏆 **(Recommended)** Maximum root hiding & banking app bypass |
-          | `*lsm-SUSFS_true*.zip` | **LSM Hook** | ✅ **Enabled** | ARM64 Hookless non-invasive isolation |
-          | `*manual-SUSFS_false*.zip` | **Manual Hook** | ❌ None | Clean KernelSU experience |
-          | `*lsm-SUSFS_false*.zip` | **LSM Hook** | ❌ None | Clean LSM KernelSU experience |
-
-          ---
-
-          ### ⚡ Performance & Kernel Enhancements
-          - **Google Tensor G2 Sultan Optimization**: Custom task scheduling and thermal responsiveness.
-          - **Advanced Networking**: TCP BBR v1 + FQ pacing algorithms for lower latency.
-          - **Full Policy Routing**: IPSet (64k entries) & TProxy match extensions enabled.
-          - **Universal AnyKernel3 Delivery**: Dynamic ramdisk patching; non-destructive to stock vendor modules.
-
-          ---
-
-          ### 📲 Installation Guide
-          1. Download the recommended zip package (e.g. `*manual-SUSFS_true*.zip`);
-          2. Flash via **KernelFlasher**, **Franco Kernel Manager**, or custom recovery (TWRP);
-          3. Reboot system and install the latest **KernelSU Manager** APK & **SuSFS** module.
-          EOF
+          {
+            echo "## 📱 Pixel 7 GKI Kernel"
+            echo ""
+            echo "### 🚀 Build Info"
+            echo "| Item | Details |"
+            echo "| :--- | :--- |"
+            echo "| **Device** | Google Pixel 7 Series (\`gs201\` / Pantah) |"
+            echo "| **Kernel Base** | \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\` |"
+            echo "| **KernelSU** | $KSU_DISPLAY |"
+            echo "| **SuSFS** | $SUSFS_DISPLAY |"
+            echo "| **Compiler** | \`${TOOLCHAIN_DISPLAY:-Clang 17.0.6 + GCC 14.2}\` |"
+            echo "| **Build Date** | \`${DATE} ${TIME}\` |"
+          } > release_note.md
 
       - name: Publish or Update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="$(date +"%y%m%d")-gki"
+          PRERELEASE_FLAG=""
           if [ "${{ github.event.inputs.ksu_branch }}" = "staging" ]; then
-            TITLE="Pixel 7 Series (Pantah) Google Official ACK Kernel ${KERNEL_VER_FULL} - KernelSU (Staging)"
+            PRERELEASE_FLAG="--prerelease"
+            TITLE="Pixel 7 GKI Kernel ${KERNEL_VER_FULL} (Staging)"
           else
-            TITLE="Pixel 7 Series (Pantah) Google Official ACK Kernel ${KERNEL_VER_FULL} - KernelSU"
+            TITLE="Pixel 7 GKI Kernel ${KERNEL_VER_FULL}"
           fi
 
           echo "🚀 Publishing/Updating release for tag: $TAG_NAME"
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "Release $TAG_NAME already exists, updating title/notes and replacing assets..."
-            gh release edit "$TAG_NAME" --title "$TITLE" --notes-file release_note.md
+            gh release edit "$TAG_NAME" --title "$TITLE" $PRERELEASE_FLAG --notes-file release_note.md
             gh release upload "$TAG_NAME" release_files/*.zip --clobber
           else
             echo "Creating new release for tag $TAG_NAME..."
-            gh release create "$TAG_NAME" release_files/*.zip --target "${{ github.sha }}" --title "$TITLE" --notes-file release_note.md
+            gh release create "$TAG_NAME" release_files/*.zip --target "${{ github.sha }}" $PRERELEASE_FLAG --title "$TITLE" --notes-file release_note.md
           fi

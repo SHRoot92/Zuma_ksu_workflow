@@ -1138,45 +1138,26 @@ jobs:
           KSU_VER="${KSU_VER:-unknown}"
 
           PRERELEASE_FLAG=""
-          TITLE_PREFIX="Release"
-          DEBUG_NOTE=""
           if [ "$KSU_BRANCH" = "staging" ]; then
             PRERELEASE_FLAG="--prerelease"
-            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel ${KERNEL_VER} - KernelSU (Staging)"
+            RELEASE_TITLE="Pixel 7 Sultan Kernel ${KERNEL_VER} (Staging)"
           else
-            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel ${KERNEL_VER} - KernelSU"
+            RELEASE_TITLE="Pixel 7 Sultan Kernel ${KERNEL_VER}"
           fi
           BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
           {
-            echo "## 📱 Sultan gs201 Kernel — $TITLE_PREFIX $TAG"
+            echo "## 📱 Pixel 7 Sultan Kernel"
             echo ""
-            echo "### 🚀 Build Information"
-            echo "| Component | Details |"
+            echo "### 🚀 Build Info"
+            echo "| Item | Details |"
             echo "| :--- | :--- |"
-            echo "| **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
+            echo "| **Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
             echo "| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |"
-            echo "| **KernelSU Branch** | $KSU_DISPLAY |"
-            echo "| **SuSFS Version** | $SUSFS_DISPLAY |"
+            echo "| **KernelSU** | $KSU_DISPLAY |"
+            echo "| **SuSFS** | $SUSFS_DISPLAY |"
             echo "| **Compiler** | $TOOLCHAIN_DISPLAY |"
             echo "| **Build Date** | $BUILD_TIME |"
-            echo ""
-            echo "### 📦 Variant Breakdown"
-            echo "| Package | Security Hook Mode | SuSFS Status | Stealth Level |"
-            echo "| :--- | :--- | :--- | :--- |"
-            echo "| \`*-manual-SUSFS_${SUSFS_VER}-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled ($SUSFS_DISPLAY) | 🛡️ **Maximum Stealth** (Recommended) |"
-            echo "| \`*-manual-*.zip\` | Manual Security Hooks (Inline) | ❌ Clean KSU | Standard Root |"
-            echo "| \`*-lsm-SUSFS_${SUSFS_VER}-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled ($SUSFS_DISPLAY) | Hookless Stealth |"
-            echo "| \`*-lsm-*.zip\` | LSM Security Hooks (BL Hookless) | ❌ Clean KSU | Standard Hookless Root |"
-            echo ""
-            if [ -n "$DEBUG_NOTE" ]; then
-              echo "$DEBUG_NOTE"
-              echo ""
-            fi
-            echo "### ⚡ Networking & Performance Tweaks"
-            echo "- **TCP Congestion Control:** BBR v1 + FQ default"
-            echo "- **Advanced Policy Routing:** Table 1066 support & 64k IPSet for seamless split-tunneling"
-            echo "- **Fixes & Compatibility:** ADDRTYPE match, Google VPN (XFRM), TTL 64 share"
           } > release_body.md
 
           if gh release view "$TAG" >/dev/null 2>&1; then
