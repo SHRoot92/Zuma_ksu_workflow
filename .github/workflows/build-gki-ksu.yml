@@ -392,6 +392,10 @@ jobs:
           KERNEL_VER="${V_MAJOR}.${V_PATCH}"
 
           SUSFS_VER="unknown"
+          SUSFS_COMMIT=""
+          if [ -d "susfs4ksu" ]; then
+            SUSFS_COMMIT=$(git -C susfs4ksu rev-parse --short HEAD 2>/dev/null || true)
+          fi
           if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
             SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}')
           fi
@@ -401,12 +405,13 @@ jobs:
           echo "kernel_ver=$KERNEL_VER" >> "$GITHUB_OUTPUT"
           echo "kernel_ver_full=$KERNEL_VER_FULL" >> "$GITHUB_OUTPUT"
           echo "susfs_ver=$SUSFS_VER" >> "$GITHUB_OUTPUT"
+          echo "susfs_commit=$SUSFS_COMMIT" >> "$GITHUB_OUTPUT"
 
           echo "======================================"
           echo "🐧 Kernel Base: Linux $KERNEL_VER_FULL (GKI)"
           echo "🔧 KSU Branch: $KSU_BRANCH (+$K_VER)"
           echo "🪝 Hook Mode: ${{ matrix.hook_mode }}"
-          echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER)"
+          echo "🛡️ SUSFS: ${{ matrix.enable_susfs }} ($SUSFS_VER${SUSFS_COMMIT:+ @ $SUSFS_COMMIT})"
           echo "⚙️ Compiler: $TOOLCHAIN_DISPLAY"
           echo "⚡ Ccache: ${{ github.event.inputs.use_ccache != 'false' && 'Enabled' || 'Disabled' }}"
           echo "======================================"
@@ -562,6 +567,7 @@ jobs:
           echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'" >> ./output_artifacts/build_metadata.env
           if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
             echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
+            echo "SUSFS_COMMIT='${{ steps.meta.outputs.susfs_commit }}'" >> ./output_artifacts/build_metadata.env
           fi
 
           if [ "${{ github.event.inputs.upload_debug_symbols }}" = "true" ]; then
@@ -635,6 +641,7 @@ jobs:
             echo "KSU_VER=${KSU_VER}" >> "$GITHUB_ENV"
             echo "TOOLCHAIN_DISPLAY=${TOOLCHAIN_DISPLAY}" >> "$GITHUB_ENV"
             echo "SUSFS_VER=${SUSFS_VER}" >> "$GITHUB_ENV"
+            echo "SUSFS_COMMIT=${SUSFS_COMMIT}" >> "$GITHUB_ENV"
           fi
 
       - name: Generate Release Notes
@@ -673,7 +680,11 @@ jobs:
           echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\`" >> release_note.md
           echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
-            echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v}\` (GKI android14-6.1)" >> release_note.md
+            if [ -n "${SUSFS_COMMIT}" ]; then
+              echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v} (${SUSFS_COMMIT})\` (GKI android14-6.1)" >> release_note.md
+            else
+              echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER#v}\` (GKI android14-6.1)" >> release_note.md
+            fi
           fi
           echo "- ⚙️ **Compiler Toolchain**: \`${TOOLCHAIN_DISPLAY:-Clang 17.0.6 + GCC 14.2}\`" >> release_note.md
           echo "- 🏷️ **Kernel Suffix**: \`${{ env.KERNEL_NAME }}\`" >> release_note.md

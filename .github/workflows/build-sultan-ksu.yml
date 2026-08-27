@@ -278,8 +278,12 @@ jobs:
             fi
           fi
           
-          # Get SuSFS version
+          # Get SuSFS version & commit
           SUSFS_VER="unknown"
+          SUSFS_COMMIT=""
+          if [ -d "susfs4ksu" ]; then
+            SUSFS_COMMIT=$(git -C susfs4ksu rev-parse --short HEAD 2>/dev/null || true)
+          fi
           if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
             SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}' || echo "unknown")
           fi
@@ -291,6 +295,7 @@ jobs:
             echo "toolchain_display=$TOOLCHAIN_DISPLAY"
             echo "kernel_ver=$KERNEL_VER"
             echo "susfs_ver=$SUSFS_VER"
+            echo "susfs_commit=$SUSFS_COMMIT"
           } >> "$GITHUB_OUTPUT"
           
           echo "======================================"
@@ -536,6 +541,7 @@ jobs:
             echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'"
             if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
               echo "SUSFS_VER='${SUSFS_VER}'"
+              echo "SUSFS_COMMIT='${{ steps.meta.outputs.susfs_commit }}'"
             fi
           } > ./output_artifacts/build_metadata.env
           
@@ -782,8 +788,12 @@ jobs:
             fi
           fi
           
-          # Get SuSFS version
+          # Get SuSFS version & commit
           SUSFS_VER="unknown"
+          SUSFS_COMMIT=""
+          if [ -d "susfs4ksu" ]; then
+            SUSFS_COMMIT=$(git -C susfs4ksu rev-parse --short HEAD 2>/dev/null || true)
+          fi
           if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
             SUSFS_VER=$(grep -E '#define SUSFS_VERSION' susfs4ksu/kernel_patches/include/linux/susfs.h | awk -F '"' '{print $2}' || echo "unknown")
           fi
@@ -795,6 +805,7 @@ jobs:
             echo "toolchain_display=$TOOLCHAIN_DISPLAY"
             echo "kernel_ver=$KERNEL_VER"
             echo "susfs_ver=$SUSFS_VER"
+            echo "susfs_commit=$SUSFS_COMMIT"
           } >> "$GITHUB_OUTPUT"
           
           echo "======================================"
@@ -1016,6 +1027,7 @@ jobs:
             echo "TOOLCHAIN_DISPLAY='${TOOLCHAIN_DISPLAY}'"
             if [ "${{ matrix.enable_susfs }}" = "true" ] && [ -n "$SUSFS_VER" ] && [ "$SUSFS_VER" != "unknown" ]; then
               echo "SUSFS_VER='${SUSFS_VER}'"
+              echo "SUSFS_COMMIT='${{ steps.meta.outputs.susfs_commit }}'"
             fi
           } > ./output_artifacts/build_metadata.env
           
@@ -1104,7 +1116,7 @@ jobs:
           fi
 
           if [ -f "./all_artifacts/build_metadata.env" ]; then
-            eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY|SUSFS_VER)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
+            eval "$(grep -E '^(KERNEL_VER|KSU_VER|S_TAG|TOOLCHAIN_DISPLAY|SUSFS_VER|SUSFS_COMMIT)=' ./all_artifacts/build_metadata.env 2>/dev/null || true)"
           fi
           if [ -z "$SUSFS_VER" ] || [ "$SUSFS_VER" = "unknown" ]; then
             DETECTED_SUSFS=$(find ./all_artifacts -name "*SUSFS_*.zip" -type f | head -n1 | sed -E 's/.*SUSFS_([^-]+)-.*/\1/' || true)
@@ -1114,6 +1126,11 @@ jobs:
           fi
           if [ -z "$SUSFS_VER" ] || [ "$SUSFS_VER" = "unknown" ]; then
             SUSFS_VER="v2.2.0"
+          fi
+          if [ -n "$SUSFS_COMMIT" ]; then
+            SUSFS_DISPLAY="\`v${SUSFS_VER#v} (${SUSFS_COMMIT})\`"
+          else
+            SUSFS_DISPLAY="\`v${SUSFS_VER#v}\`"
           fi
           TOOLCHAIN_DISPLAY="${TOOLCHAIN_DISPLAY:-ARM GNU Toolchain}"
           KERNEL_VER="${KERNEL_VER:-6.1}"
@@ -1139,16 +1156,16 @@ jobs:
             echo "| **Target Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
             echo "| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |"
             echo "| **KernelSU Branch** | \`$KSU_BRANCH\` (+$KSU_VER) |"
-            echo "| **SuSFS Version** | \`$SUSFS_VER\` |"
+            echo "| **SuSFS Version** | $SUSFS_DISPLAY |"
             echo "| **Compiler** | $TOOLCHAIN_DISPLAY |"
             echo "| **Build Date** | $BUILD_TIME |"
             echo ""
             echo "### 📦 Variant Breakdown"
             echo "| Package | Security Hook Mode | SuSFS Status | Stealth Level |"
             echo "| :--- | :--- | :--- | :--- |"
-            echo "| \`*-manual-SUSFS_${SUSFS_VER}-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled (\`$SUSFS_VER\`) | 🛡️ **Maximum Stealth** (Recommended) |"
+            echo "| \`*-manual-SUSFS_${SUSFS_VER}-*.zip\` | Manual Security Hooks (Inline) | ✅ Enabled ($SUSFS_DISPLAY) | 🛡️ **Maximum Stealth** (Recommended) |"
             echo "| \`*-manual-*.zip\` | Manual Security Hooks (Inline) | ❌ Clean KSU | Standard Root |"
-            echo "| \`*-lsm-SUSFS_${SUSFS_VER}-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled (\`$SUSFS_VER\`) | Hookless Stealth |"
+            echo "| \`*-lsm-SUSFS_${SUSFS_VER}-*.zip\` | LSM Security Hooks (BL Hookless) | ✅ Enabled ($SUSFS_DISPLAY) | Hookless Stealth |"
             echo "| \`*-lsm-*.zip\` | LSM Security Hooks (BL Hookless) | ❌ Clean KSU | Standard Hookless Root |"
             echo ""
             if [ -n "$DEBUG_NOTE" ]; then
