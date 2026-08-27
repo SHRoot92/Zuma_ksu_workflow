@@ -1103,7 +1103,7 @@ jobs:
           KSU_BRANCH: ${{ github.event.inputs.ksu_branch || 'master' }}
         run: |
           DATE=$(date +"%y%m%d")
-          TAG="$DATE"
+          TAG="${DATE}-sultan"
 
           ZIP_FILES=$(find ./all_artifacts -name "*.zip" -type f)
           if [ -z "$ZIP_FILES" ]; then
