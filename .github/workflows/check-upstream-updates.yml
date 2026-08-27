@@ -44,6 +44,10 @@ jobs:
           SUSFS_BRANCH=$(jq -r '.susfs_branch // "gki-android14-6.1"' "$STATE_FILE")
           OLD_SUSFS_SHA=$(jq -r '.susfs_last_sha // ""' "$STATE_FILE")
 
+          PATCHES_REPO=$(jq -r '.patches_repo // "midori01/gki_ksu_workflow"' "$STATE_FILE")
+          PATCHES_BRANCH=$(jq -r '.patches_branch // "main"' "$STATE_FILE")
+          OLD_PATCHES_SHA=$(jq -r '.patches_last_sha // ""' "$STATE_FILE")
+
           echo "🔍 Checking upstream KernelSU ($KSU_REPO:$KSU_BRANCH)..."
           NEW_KSU_SHA=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/${KSU_REPO}/commits/${KSU_BRANCH}" | jq -r .sha)
           if [ -z "$NEW_KSU_SHA" ] || [ "$NEW_KSU_SHA" = "null" ]; then
@@ -54,11 +58,19 @@ jobs:
           echo "🔍 Checking upstream SuSFS ($SUSFS_REPO:$SUSFS_BRANCH)..."
           NEW_SUSFS_SHA=$(git ls-remote "$SUSFS_REPO" "refs/heads/${SUSFS_BRANCH}" | awk '{print $1}')
 
+          echo "🔍 Checking upstream Midori Patches ($PATCHES_REPO:$PATCHES_BRANCH)..."
+          NEW_PATCHES_SHA=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/${PATCHES_REPO}/commits/${PATCHES_BRANCH}" | jq -r .sha)
+          if [ -z "$NEW_PATCHES_SHA" ] || [ "$NEW_PATCHES_SHA" = "null" ]; then
+            NEW_PATCHES_SHA=$(git ls-remote "https://github.com/${PATCHES_REPO}.git" "refs/heads/${PATCHES_BRANCH}" | awk '{print $1}')
+          fi
+
           echo "=== Upstream Commit Comparison ==="
-          echo "KernelSU Current:  $OLD_KSU_SHA"
-          echo "KernelSU Upstream: $NEW_KSU_SHA"
-          echo "SuSFS Current:     $OLD_SUSFS_SHA"
-          echo "SuSFS Upstream:    $NEW_SUSFS_SHA"
+          echo "KernelSU Current:       $OLD_KSU_SHA"
+          echo "KernelSU Upstream:      $NEW_KSU_SHA"
+          echo "SuSFS Current:          $OLD_SUSFS_SHA"
+          echo "SuSFS Upstream:         $NEW_SUSFS_SHA"
+          echo "Midori Patches Current: $OLD_PATCHES_SHA"
+          echo "Midori Patches Upstream:$NEW_PATCHES_SHA"
 
           TRIGGER_BUILD="false"
           CHANGES_DESC=""
@@ -75,6 +87,12 @@ jobs:
             CHANGES_DESC="${CHANGES_DESC} SuSFS ($SUSFS_BRANCH: ${NEW_SUSFS_SHA:0:7})"
           fi
 
+          if [ "$NEW_PATCHES_SHA" != "$OLD_PATCHES_SHA" ] && [ -n "$NEW_PATCHES_SHA" ] && [ "$NEW_PATCHES_SHA" != "null" ]; then
+            echo "✨ Midori Patches has new commit: ${NEW_PATCHES_SHA:0:7}"
+            TRIGGER_BUILD="true"
+            CHANGES_DESC="${CHANGES_DESC} MidoriPatches ($PATCHES_BRANCH: ${NEW_PATCHES_SHA:0:7})"
+          fi
+
           if [ "${{ github.event.inputs.force_trigger }}" = "true" ]; then
             echo "⚡ Force trigger requested by user!"
             TRIGGER_BUILD="true"
@@ -84,6 +102,7 @@ jobs:
           echo "trigger_build=$TRIGGER_BUILD" >> "$GITHUB_OUTPUT"
           echo "new_ksu_sha=$NEW_KSU_SHA" >> "$GITHUB_OUTPUT"
           echo "new_susfs_sha=$NEW_SUSFS_SHA" >> "$GITHUB_OUTPUT"
+          echo "new_patches_sha=$NEW_PATCHES_SHA" >> "$GITHUB_OUTPUT"
           echo "changes_desc=$CHANGES_DESC" >> "$GITHUB_OUTPUT"
 
       - name: Update State File and Commit
@@ -92,10 +111,13 @@ jobs:
           set -e
           NEW_KSU_SHA="${{ steps.check_upstream.outputs.new_ksu_sha }}"
           NEW_SUSFS_SHA="${{ steps.check_upstream.outputs.new_susfs_sha }}"
+          NEW_PATCHES_SHA="${{ steps.check_upstream.outputs.new_patches_sha }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           STATE_FILE=".github/upstream_state.json"
 
-          jq --arg ksu "$NEW_KSU_SHA" --arg susfs "$NEW_SUSFS_SHA" --arg time "$TIMESTAMP"             '.ksu_last_sha = $ksu | .susfs_last_sha = $susfs | .last_updated = $time'             "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+          jq --arg ksu "$NEW_KSU_SHA" --arg susfs "$NEW_SUSFS_SHA" --arg patch "$NEW_PATCHES_SHA" --arg time "$TIMESTAMP" \
+            '.ksu_last_sha = $ksu | .susfs_last_sha = $susfs | .patches_last_sha = $patch | .last_updated = $time' \
+            "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -104,7 +126,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No state changes to commit."
           else
-            git commit -m "chore(upstream): sync state to ${NEW_KSU_SHA:0:7} (KSU) & ${NEW_SUSFS_SHA:0:7} (SuSFS)"
+            git commit -m "chore(upstream): sync state to ${NEW_KSU_SHA:0:7} (KSU), ${NEW_SUSFS_SHA:0:7} (SuSFS) & ${NEW_PATCHES_SHA:0:7} (Midori)"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
@@ -123,12 +145,14 @@ jobs:
           echo "- **Trigger Reason**: ${{ steps.check_upstream.outputs.changes_desc }}" >> $GITHUB_STEP_SUMMARY
           echo "- **KernelSU Commit**: \`${{ steps.check_upstream.outputs.new_ksu_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **SuSFS Commit**: \`${{ steps.check_upstream.outputs.new_susfs_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Midori Patches Commit**: \`${{ steps.check_upstream.outputs.new_patches_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered Workflows**: \`build-gki-ksu.yml\` & \`build-sultan-ksu.yml\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Report No Update
         if: steps.check_upstream.outputs.trigger_build != 'true'
         run: |
           echo "### 💤 Upstream Check Completed" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: No new commits detected in upstream KernelSU or SuSFS." >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: No new commits detected across all tracked upstreams." >> $GITHUB_STEP_SUMMARY
           echo "- **Current KernelSU SHA**: \`${{ steps.check_upstream.outputs.new_ksu_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Current SuSFS SHA**: \`${{ steps.check_upstream.outputs.new_susfs_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Current Midori Patches SHA**: \`${{ steps.check_upstream.outputs.new_patches_sha }}\`" >> $GITHUB_STEP_SUMMARY

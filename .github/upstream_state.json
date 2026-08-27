@@ -5,5 +5,8 @@
   "susfs_repo": "https://gitlab.com/simonpunk/susfs4ksu.git",
   "susfs_branch": "gki-android14-6.1",
   "susfs_last_sha": "598370fe434a7825bfe0f41d3029d102e3cfaec4",
-  "last_updated": "2026-08-27T07:06:22Z"
+  "patches_repo": "midori01/gki_ksu_workflow",
+  "patches_branch": "main",
+  "patches_last_sha": "e2d1395be73e1a55d066a984e3626574b986c405",
+  "last_updated": "2026-08-27T07:41:00Z"
 }
