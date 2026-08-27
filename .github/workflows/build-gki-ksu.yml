@@ -218,28 +218,9 @@ jobs:
             ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
             echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
             aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-            mkdir -p temp_pantah
-            tar -xf pantah.tar.xz -C temp_pantah
+            tar -xf pantah.tar.xz --strip-components=3 -C common "kernel-pantah-15260412/common/ack" || \
+            tar -xf pantah.tar.xz -C common
             rm -f pantah.tar.xz
-            if [ -f "temp_pantah/kernel-pantah-15260412/common/ack/Makefile" ]; then
-              mv temp_pantah/kernel-pantah-15260412/common/ack/* common/
-            elif [ -f "temp_pantah/common/ack/Makefile" ]; then
-              mv temp_pantah/common/ack/* common/
-            elif [ -f "temp_pantah/kernel-pantah-15260412/common/Makefile" ]; then
-              mv temp_pantah/kernel-pantah-15260412/common/* common/
-            elif [ -f "temp_pantah/common/Makefile" ]; then
-              mv temp_pantah/common/* common/
-            elif [ -f "temp_pantah/Makefile" ]; then
-              mv temp_pantah/* common/
-            else
-              SRC_DIR=$(find temp_pantah -name "Makefile" -path "*/arch/arm64/*" -prune -o -name "Makefile" -exec dirname {} \; | grep -E "(ack|common|aosp)" | head -n1)
-              if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
-                mv "$SRC_DIR"/* common/
-              else
-                mv temp_pantah/* common/
-              fi
-            fi
-            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
             echo "Downloading GKI source from: $ARCHIVE_URL"
@@ -333,7 +314,17 @@ jobs:
           LLVM_IAS: 1
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig
+          echo "⚙️ Generating GKI defconfig..."
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" \
+            DEFCONFIG=arch/arm64/configs/gki_defconfig defconfig || {
+            echo "❌ ERROR: Failed to generate defconfig"
+            exit 1
+          }
+          if [ ! -f "out/.config" ]; then
+            echo "❌ ERROR: Defconfig generation failed - .config not found"
+            exit 1
+          fi
+          echo "✅ GKI defconfig generated successfully"
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
@@ -584,28 +575,9 @@ jobs:
             ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
             echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
             aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
-            mkdir -p temp_pantah
-            tar -xf pantah.tar.xz -C temp_pantah
+            tar -xf pantah.tar.xz --strip-components=3 -C common "kernel-pantah-15260412/common/ack" || \
+            tar -xf pantah.tar.xz -C common
             rm -f pantah.tar.xz
-            if [ -f "temp_pantah/kernel-pantah-15260412/common/ack/Makefile" ]; then
-              mv temp_pantah/kernel-pantah-15260412/common/ack/* common/
-            elif [ -f "temp_pantah/common/ack/Makefile" ]; then
-              mv temp_pantah/common/ack/* common/
-            elif [ -f "temp_pantah/kernel-pantah-15260412/common/Makefile" ]; then
-              mv temp_pantah/kernel-pantah-15260412/common/* common/
-            elif [ -f "temp_pantah/common/Makefile" ]; then
-              mv temp_pantah/common/* common/
-            elif [ -f "temp_pantah/Makefile" ]; then
-              mv temp_pantah/* common/
-            else
-              SRC_DIR=$(find temp_pantah -name "Makefile" -path "*/arch/arm64/*" -prune -o -name "Makefile" -exec dirname {} \; | grep -E "(ack|common|aosp)" | head -n1)
-              if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
-                mv "$SRC_DIR"/* common/
-              else
-                mv temp_pantah/* common/
-              fi
-            fi
-            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
             echo "Downloading GKI source from: $ARCHIVE_URL"
@@ -692,7 +664,17 @@ jobs:
           LLVM_IAS: 1
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig
+          echo "⚙️ Generating GKI defconfig..."
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" \
+            DEFCONFIG=arch/arm64/configs/gki_defconfig defconfig || {
+            echo "❌ ERROR: Failed to generate defconfig"
+            exit 1
+          }
+          if [ ! -f "out/.config" ]; then
+            echo "❌ ERROR: Defconfig generation failed - .config not found"
+            exit 1
+          fi
+          echo "✅ GKI defconfig generated successfully"
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
