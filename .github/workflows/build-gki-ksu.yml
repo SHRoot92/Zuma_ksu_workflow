@@ -114,7 +114,7 @@ jobs:
 
       - name: Check Source Cache
         id: source_cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/restore-cache-retry
         with:
           path: common
           key: pantah-kernel-v3-15260412
@@ -171,7 +171,7 @@ jobs:
 
       - name: Check Toolchains Cache
         id: toolchain_cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/restore-cache-retry
         with:
           path: toolchains
           key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
@@ -257,7 +257,7 @@ jobs:
 
       - name: Restore Ccache
         if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v6
+        uses: ./.github/actions/restore-cache-retry
         with:
           path: ${{ env.CCACHE_DIR }}
           key: gki-ccache-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-${{ github.run_id }}
@@ -266,7 +266,7 @@ jobs:
             gki-ccache-
 
       - name: Restore Toolchains from Cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/restore-cache-retry
         with:
           path: toolchains
           key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
@@ -310,7 +310,7 @@ jobs:
           fi
 
       - name: Restore Clean Kernel Source from Cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/restore-cache-retry
         with:
           path: common
           key: pantah-kernel-v3-15260412
