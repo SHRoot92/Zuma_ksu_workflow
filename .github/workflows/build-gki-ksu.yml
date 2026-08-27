@@ -3,11 +3,14 @@ name: Build GKI + KSU (Matrix)
 on:
   workflow_dispatch:
     inputs:
-      gki_tag:
-        description: 'AOSP GKI Branch/Tag Archive (e.g. android14-6.1-2026-06)'
+      gki_version:
+        description: 'GKI 6.1 Kernel Version'
         required: true
-        type: string
-        default: 'android14-6.1-2026-06'
+        type: choice
+        options:
+          - '6.1.145'
+          - '6.1-lts'
+        default: '6.1.145'
       ksu_branch:
         description: 'KernelSU Branch'
         required: true
@@ -55,7 +58,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}-${{ github.event.inputs.gki_tag }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.ksu_branch }}-${{ github.event.inputs.gki_version }}
   cancel-in-progress: false
 
 env:
@@ -196,10 +199,19 @@ jobs:
       - name: Clone GKI Source & Aux Repos
         run: |
           mkdir -p common
-          GKI_TAG="${{ github.event.inputs.gki_tag || 'android14-6.1-2026-06' }}"
-          echo "Downloading GKI source ($GKI_TAG)..."
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_TAG}.tar.gz" -o common.tar.gz || \
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_TAG}.tar.gz" -o common.tar.gz
+          GKI_VER="${{ github.event.inputs.gki_version || '6.1.145' }}"
+          echo "Resolving GKI archive URL for: $GKI_VER..."
+          if [ "$GKI_VER" = "6.1.145" ]; then
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
+          elif [ "$GKI_VER" = "6.1-lts" ] || [ "$GKI_VER" = "6.1 LTS" ]; then
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
+          else
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
+          fi
+
+          echo "Downloading GKI source from: $ARCHIVE_URL"
+          aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
           tar -xzf common.tar.gz -C common
           rm -f common.tar.gz
 
@@ -520,10 +532,19 @@ jobs:
       - name: Clone GKI Source & Aux Repos
         run: |
           mkdir -p common
-          GKI_TAG="${{ github.event.inputs.gki_tag || 'android14-6.1-2026-06' }}"
-          echo "Downloading GKI source ($GKI_TAG)..."
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_TAG}.tar.gz" -o common.tar.gz || \
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_TAG}.tar.gz" -o common.tar.gz
+          GKI_VER="${{ github.event.inputs.gki_version || '6.1.145' }}"
+          echo "Resolving GKI archive URL for: $GKI_VER..."
+          if [ "$GKI_VER" = "6.1.145" ]; then
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
+          elif [ "$GKI_VER" = "6.1-lts" ] || [ "$GKI_VER" = "6.1 LTS" ]; then
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
+          else
+            ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
+          fi
+
+          echo "Downloading GKI source from: $ARCHIVE_URL"
+          aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
           tar -xzf common.tar.gz -C common
           rm -f common.tar.gz
 
