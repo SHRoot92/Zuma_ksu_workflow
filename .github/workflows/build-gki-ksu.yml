@@ -298,7 +298,69 @@ jobs:
         with:
           path: common
           key: gki-kernel-clean-${{ github.event.inputs.gki_version || 'pantah-15260412' }}
-          fail-on-cache-miss: true
+
+      - name: Ensure Kernel Source Present
+        run: |
+          if [ ! -f "common/Makefile" ]; then
+            echo "⚡ Cache miss fallback: Downloading and extracting kernel source..."
+            mkdir -p common
+            GKI_VER="${{ github.event.inputs.gki_version || 'pantah-15260412' }}"
+            if [ "$GKI_VER" = "pantah-15260412" ]; then
+              ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
+              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
+              mkdir -p temp_pantah
+              tar -xf pantah.tar.xz -C temp_pantah
+              rm -f pantah.tar.xz
+              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+              rm -rf temp_pantah
+            elif [ "$GKI_VER" = "pantah-14810637" ]; then
+              ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/kernel-pantah-14810637/kernel-pantah-14810637.tar.gz"
+              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.gz
+              mkdir -p temp_pantah
+              tar -zxvf pantah.tar.gz -C temp_pantah --strip-components=1
+              rm -f pantah.tar.gz
+              if [ -d "temp_pantah/common" ]; then
+                cp -a temp_pantah/common/. common/
+              else
+                cp -a temp_pantah/. common/
+              fi
+              rm -rf temp_pantah
+            elif [ "$GKI_VER" = "6.1.145" ]; then
+              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
+              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+              tar -xzf common.tar.gz -C common
+              rm -f common.tar.gz
+            elif [ "$GKI_VER" = "6.1-lts" ]; then
+              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
+              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+              tar -xzf common.tar.gz -C common
+              rm -f common.tar.gz
+            else
+              ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
+              aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+              aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
+              tar -xzf common.tar.gz -C common
+              rm -f common.tar.gz
+            fi
+
+            # Inject GS201 defconfig
+            curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
+              -o common/arch/arm64/configs/gki_defconfig
+
+            # Clean dirty suffix & remove ABI limitations
+            rm -f common/android/abi_gki_protected_exports_* || true
+            sed -i 's/ -dirty//g' common/scripts/setlocalversion 2>/dev/null || true
+            sed -i 's/-dirty//g' common/scripts/setlocalversion 2>/dev/null || true
+            sed -i 's/check_defconfig//' common/build.config.gki 2>/dev/null || true
+          fi
+
+          if [ ! -f "common/Makefile" ] || [ ! -d "common/drivers" ]; then
+            echo "❌ ERROR: Kernel source tree invalid in common/:"
+            ls -la common
+            exit 1
+          fi
+          echo "✅ Kernel source verified in common/:"
+          head -n 6 common/Makefile
 
       - name: Clone Aux Repos
         run: |
