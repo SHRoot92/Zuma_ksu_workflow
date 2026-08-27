@@ -10,6 +10,7 @@ on:
         options:
           - '6.1.145'
           - '6.1-lts'
+          - 'pantah-15260412'
         default: '6.1.145'
       ksu_branch:
         description: 'KernelSU Branch'
@@ -203,17 +204,46 @@ jobs:
           echo "Resolving GKI archive URL for: $GKI_VER..."
           if [ "$GKI_VER" = "6.1.145" ]; then
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
           elif [ "$GKI_VER" = "6.1-lts" ] || [ "$GKI_VER" = "6.1 LTS" ]; then
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
+          elif [ "$GKI_VER" = "pantah-15260412" ]; then
+            ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
+            echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
+            mkdir -p temp_pantah
+            tar -xf pantah.tar.xz -C temp_pantah
+            rm -f pantah.tar.xz
+            if [ -d "temp_pantah/common" ]; then
+              mv temp_pantah/common/* common/
+            elif [ -d "temp_pantah/aosp" ]; then
+              mv temp_pantah/aosp/* common/
+            elif [ -f "temp_pantah/Makefile" ]; then
+              mv temp_pantah/* common/
+            else
+              SRC_DIR=$(find temp_pantah -maxdepth 3 -name "Makefile" | grep -E "(common|aosp|kernel)" | head -n1 | xargs -r dirname)
+              if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
+                mv "$SRC_DIR"/* common/
+              else
+                mv temp_pantah/* common/
+              fi
+            fi
+            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+            aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
           fi
-
-          echo "Downloading GKI source from: $ARCHIVE_URL"
-          aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
-          tar -xzf common.tar.gz -C common
-          rm -f common.tar.gz
 
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
@@ -536,17 +566,46 @@ jobs:
           echo "Resolving GKI archive URL for: $GKI_VER..."
           if [ "$GKI_VER" = "6.1.145" ]; then
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/tags/android14-6.1.145_r00.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
           elif [ "$GKI_VER" = "6.1-lts" ] || [ "$GKI_VER" = "6.1 LTS" ]; then
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/android14-6.1-lts.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
+          elif [ "$GKI_VER" = "pantah-15260412" ]; then
+            ARCHIVE_URL="https://github.com/yapixel/gki-build-assets/releases/download/pantah-15260412/kernel-pantah-15260412.tar.xz"
+            echo "Downloading official Google Pantah source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o pantah.tar.xz
+            mkdir -p temp_pantah
+            tar -xf pantah.tar.xz -C temp_pantah
+            rm -f pantah.tar.xz
+            if [ -d "temp_pantah/common" ]; then
+              mv temp_pantah/common/* common/
+            elif [ -d "temp_pantah/aosp" ]; then
+              mv temp_pantah/aosp/* common/
+            elif [ -f "temp_pantah/Makefile" ]; then
+              mv temp_pantah/* common/
+            else
+              SRC_DIR=$(find temp_pantah -maxdepth 3 -name "Makefile" | grep -E "(common|aosp|kernel)" | head -n1 | xargs -r dirname)
+              if [ -n "$SRC_DIR" ] && [ -f "$SRC_DIR/Makefile" ]; then
+                mv "$SRC_DIR"/* common/
+              else
+                mv temp_pantah/* common/
+              fi
+            fi
+            rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
+            echo "Downloading GKI source from: $ARCHIVE_URL"
+            aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
+            aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
+            tar -xzf common.tar.gz -C common
+            rm -f common.tar.gz
           fi
-
-          echo "Downloading GKI source from: $ARCHIVE_URL"
-          aria2c -s 16 -x 16 -k 1M "$ARCHIVE_URL" -o common.tar.gz || \
-          aria2c -s 16 -x 16 -k 1M "https://android.googlesource.com/kernel/common/+archive/refs/tags/${GKI_VER}.tar.gz" -o common.tar.gz
-          tar -xzf common.tar.gz -C common
-          rm -f common.tar.gz
 
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
