@@ -39,6 +39,11 @@ on:
         required: true
         type: boolean
         default: true
+      upload_debug_symbols:
+        description: 'Upload Debug Symbols (vmlinux & System.map)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -341,8 +346,8 @@ jobs:
             echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
           fi
 
-          if [ "$KSU_BRANCH" = "staging" ]; then
-            echo "Packaging debug symbols for staging build..."
+          if [ "${{ github.event.inputs.upload_debug_symbols }}" = "true" ]; then
+            echo "Packaging debug symbols..."
             VMLINUX_ZIP_NAME="vmlinux-${BASE_NAME}.zip"
             SYSMAP_ZIP_NAME="System.map-${BASE_NAME}.zip"
 
@@ -637,8 +642,8 @@ jobs:
             echo "SUSFS_VER='${SUSFS_VER}'" >> ./output_artifacts/build_metadata.env
           fi
 
-          if [ "$KSU_BRANCH" = "staging" ]; then
-            echo "Packaging debug symbols for staging build..."
+          if [ "${{ github.event.inputs.upload_debug_symbols }}" = "true" ]; then
+            echo "Packaging debug symbols..."
             VMLINUX_ZIP_NAME="vmlinux-${BASE_NAME}.zip"
             SYSMAP_ZIP_NAME="System.map-${BASE_NAME}.zip"
 
@@ -735,6 +740,8 @@ jobs:
           if [ "$KSU_BRANCH" = "staging" ]; then
             PRERELEASE_FLAG="--prerelease"
             TITLE_PREFIX="Pre-release (staging)"
+          fi
+          if [ "${{ github.event.inputs.upload_debug_symbols }}" = "true" ] || find ./all_artifacts -name "vmlinux-*.zip" -type f | grep -q .; then
             DEBUG_NOTE="> 🛠️ **Debug Symbols**: Includes \`vmlinux\` and \`System.map\` debug symbol archives for kernel debugging."
           fi
 
