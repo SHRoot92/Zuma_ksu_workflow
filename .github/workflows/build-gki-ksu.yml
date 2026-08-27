@@ -110,11 +110,11 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check Source Cache
         id: source_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: common
           key: pantah-kernel-v3-15260412
@@ -164,14 +164,14 @@ jobs:
 
       - name: Save Clean Kernel Source Cache
         if: steps.source_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: common
           key: pantah-kernel-v3-15260412
 
       - name: Check Toolchains Cache
         id: toolchain_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: toolchains
           key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
@@ -217,7 +217,7 @@ jobs:
 
       - name: Save Toolchains Cache
         if: steps.toolchain_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: toolchains
           key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
@@ -237,7 +237,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up build environment and ccache
         run: |
@@ -257,7 +257,7 @@ jobs:
 
       - name: Restore Ccache
         if: github.event.inputs.use_ccache != 'false'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CCACHE_DIR }}
           key: gki-ccache-${{ matrix.hook_mode }}-${{ matrix.enable_susfs }}-${{ github.run_id }}
@@ -266,7 +266,7 @@ jobs:
             gki-ccache-
 
       - name: Restore Toolchains from Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: toolchains
           key: gki-toolchains-${{ env.CLANG_VERSION }}-${{ env.ARM_TOOLCHAIN_VERSION }}
@@ -310,7 +310,7 @@ jobs:
           fi
 
       - name: Restore Clean Kernel Source from Cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: common
           key: pantah-kernel-v3-15260412
@@ -571,7 +571,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: GKI-${{ matrix.hook_mode }}-SUSFS_${{ matrix.enable_susfs }}
           path: ./output_artifacts/*
@@ -587,7 +587,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release_artifacts
 
