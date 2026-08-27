@@ -679,14 +679,19 @@ jobs:
           3. Reboot system and install the latest **KernelSU Manager** APK & **SuSFS** module.
           EOF
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "pantah-${{ env.KERNEL_VER_FULL || '6.1.162' }}-ksu-v${{ env.KSU_VER || 'latest' }}-r${{ github.run_number }}"
-          name: "Pixel 7/Pro (Pantah) Kernel ${{ env.KERNEL_VER_FULL || '6.1.162' }} - KernelSU"
-          body_path: release_note.md
-          files: release_files/*.zip
-          draft: false
-          prerelease: false
+      - name: Publish or Update GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=$(date +"%y%m%d")
+          TITLE="Pixel 7/Pro (Pantah) Kernel ${{ env.KERNEL_VER_FULL || '6.1.162' }} - KernelSU"
+
+          echo "🚀 Publishing/Updating release for tag: $TAG_NAME"
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists, updating title/notes and replacing assets..."
+            gh release edit "$TAG_NAME" --title "$TITLE" --notes-file release_note.md
+            gh release upload "$TAG_NAME" release_files/*.zip --clobber
+          else
+            echo "Creating new release for tag $TAG_NAME..."
+            gh release create "$TAG_NAME" release_files/*.zip --title "$TITLE" --notes-file release_note.md
+          fi
