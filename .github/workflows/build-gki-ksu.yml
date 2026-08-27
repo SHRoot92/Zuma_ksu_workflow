@@ -8,10 +8,10 @@ on:
         required: true
         type: choice
         options:
+          - 'pantah-15260412'
           - '6.1.145'
           - '6.1-lts'
-          - 'pantah-15260412'
-        default: '6.1.145'
+        default: 'pantah-15260412'
       ksu_branch:
         description: 'KernelSU Branch'
         required: true
