@@ -1,4 +1,4 @@
-name: Build Google Pantah (Pixel 7/Pro) Kernel + KernelSU
+name: Build Google Pantah Kernel + KernelSU
 
 on:
   workflow_dispatch:
