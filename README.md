@@ -1,6 +1,6 @@
-﻿# Sultan Kernel for Google Pixel 7 / Pro (gs201)
+# Sultan & GKI Kernel for Google Pixel 7 / Pro (gs201)
 
-Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kernel** with **KernelSU (xxKSU)** and **SuSFS** for Google Tensor G2 devices (`gs201` — Cheetah & Panther).
+Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kernel** and **AOSP GKI Kernel (Android 14 6.1)** with **KernelSU (xxKSU)** and **SuSFS** for Google Tensor G2 devices (`gs201` — Cheetah & Panther).
 
 ---
 
@@ -8,26 +8,26 @@ Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kern
 
 | Codename | Device Name | SoC / Platform | Kernel Base |
 | :--- | :--- | :--- | :--- |
-| **Cheetah** | Google Pixel 7 Pro | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
-| **Panther** | Google Pixel 7 | Google Tensor G2 (`gs201`) | Sultan (Linux 6.1) |
+| **Cheetah** | Google Pixel 7 Pro | Google Tensor G2 (`gs201`) | Sultan (6.1) / AOSP GKI (6.1) |
+| **Panther** | Google Pixel 7 | Google Tensor G2 (`gs201`) | Sultan (6.1) / AOSP GKI (6.1) |
 
 ---
 
 ## 📦 Release Artifact Naming Convention
 
-Artifact packages follow the standardized Scheme A naming format:
+Artifact packages follow the standardized naming format:
 
 ```text
-KSU_Sultan_gs201_6.1+<KSU_VER>[-staging]-<Hook>[-SUSFS_v<SuSFS_VER>]-<YYMMDD>.zip
+KSU_<Base>_gs201_6.1+<KSU_VER>[-staging]-<Hook>[-SUSFS_v<SuSFS_VER>]-<YYMMDD>.zip
 ```
 
 ### Examples:
 - **`KSU_Sultan_gs201_6.1+12000-manual-SUSFS_v2.2.0-260826.zip`**
-  *(Manual Security Hooks + SuSFS, Stable KSU `master` release)*
-- **`KSU_Sultan_gs201_6.1+12000-manual-260826.zip`**
-  *(Manual Security Hooks, Clean KSU without SuSFS)*
-- **`KSU_Sultan_gs201_6.1+12055-staging-lsm-SUSFS_v2.2.0-260826.zip`**
-  *(LSM Security Hooks + SuSFS, KSU `staging` pre-release)*
+  *(Sultan: Manual Security Hooks + SuSFS, Stable KSU `master` release)*
+- **`KSU_GKI_gs201_6.1+12000-manual-SUSFS_v2.2.0-260827.zip`**
+  *(GKI: Manual Security Hooks + SuSFS, Stable KSU `master` release)*
+- **`KSU_GKI_gs201_6.1+12055-staging-lsm-SUSFS_v2.2.0-260827.zip`**
+  *(GKI: LSM Security Hooks + SuSFS, KSU `staging` pre-release)*
 
 ---
 
