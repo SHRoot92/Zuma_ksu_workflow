@@ -1,4 +1,4 @@
-name: Build Sultan + KSU (Matrix)
+name: Build Sultan KSU 
 
 on:
   workflow_dispatch:
