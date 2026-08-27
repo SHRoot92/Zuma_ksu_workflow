@@ -250,6 +250,11 @@ jobs:
           echo "✅ Kernel source tree successfully placed in common/:"
           ls -la common
 
+          # Inject Google Tensor GS201 defconfig
+          echo "Injecting Tensor G2 (gs201) defconfig..."
+          curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
+            -o common/arch/arm64/configs/gki_defconfig
+
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
           git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh &
@@ -278,6 +283,7 @@ jobs:
           rm -f android/abi_gki_protected_exports_* || true
           sed -i 's/ -dirty//g' scripts/setlocalversion 2>/dev/null || true
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' scripts/setlocalversion 2>/dev/null || true
+          sed -i 's/check_defconfig//' build.config.gki 2>/dev/null || true
 
           SUSFS_VER="unknown"
           if [ -f "../susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
@@ -303,14 +309,30 @@ jobs:
         working-directory: common
         run: |
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/$KSU_BRANCH/kernel/setup.sh" | bash -s -- "$KSU_BRANCH"
+          echo "Integrating xxKSU ($KSU_BRANCH)..."
+          git clone --depth=1 --branch="$KSU_BRANCH" https://github.com/${{ env.KSU_REPO }}.git KernelSU
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || \
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
+            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          K_VER="${{ steps.meta.outputs.ksu_ver }}"
+          KSU_MAKEFILE="drivers/kernelsu/Makefile"
+          if [ -f "$KSU_MAKEFILE" ]; then
+            echo "" >> "$KSU_MAKEFILE"
+            echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
+          fi
 
       - name: Apply Manual Hook Patches
         working-directory: common
         run: |
           echo "Applying manual security hooks patches for GKI..."
           patch -p1 -l < "${{ github.workspace }}/.github/patches/manual-security-hooks-v2.0.patch" || true
-          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" || true
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/scope-min-manual-hooks-v2.3.patch" || \
+          patch -p1 -l < "${{ github.workspace }}/.github/patches/xxksu/scope-min-manual-hooks-v2.2.patch" || true
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
@@ -323,8 +345,7 @@ jobs:
           patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" || true
 
           echo "Applying SuSFS patch to KernelSU..."
-          cd KernelSU
-          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"
+          ( cd KernelSU && patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" )
 
       - name: Generate Defconfig
         working-directory: common
@@ -335,8 +356,8 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
           echo "⚙️ Generating GKI defconfig..."
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig || \
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" defconfig KBUILD_DEFCONFIG=gki_defconfig || \
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out gki_defconfig || \
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out defconfig KBUILD_DEFCONFIG=gki_defconfig || \
           {
             echo "Fallback copying arch/arm64/configs/gki_defconfig to out/.config..."
             mkdir -p out
@@ -363,28 +384,29 @@ jobs:
           LLVM_IAS: 1
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" olddefconfig 2>&1 | grep -v "warning: override" || true
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out olddefconfig 2>&1 | grep -v "warning: override" || true
 
       - name: Build Kernel (Production)
         working-directory: common
-        env:
-          ARCH: arm64
-          LLVM: 1
-          LLVM_IAS: 1
-          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
-          KBUILD_BUILD_USER: build-user
-          KBUILD_BUILD_HOST: build-host
-          CCACHE_BASEDIR: ${{ github.workspace }}
-          KCFLAGS: "-O2 -Wno-error"
-          KBUILD_GENDWARFKSYMS_STABLE: 1
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             CC_CMD="ccache ${CLANG_PATH}clang"
           else
             CC_CMD="${CLANG_PATH}clang"
           fi
+
+          export KCFLAGS="-O2 -Wno-error"
+          export KBUILD_BUILD_USER="build-user"
+          export KBUILD_BUILD_HOST="build-host"
+          export KBUILD_BUILD_TIMESTAMP="Fri Jan 9 16:33:46 UTC 2026"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          export CC="$CC_CMD"
+          export CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}"
+
           echo "Compiling GKI kernel with CC: $CC_CMD"
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="$CC_CMD" -j"$(nproc --all)" Image
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out Image
 
       - name: Ccache Performance Stats
         if: github.event.inputs.use_ccache != 'false'
@@ -629,6 +651,11 @@ jobs:
           echo "✅ Kernel source tree successfully placed in common/:"
           ls -la common
 
+          # Inject Google Tensor GS201 defconfig
+          echo "Injecting Tensor G2 (gs201) defconfig..."
+          curl -LSs "https://raw.githubusercontent.com/kerneltoast/android_kernel_google_tensynos/16.0.0-sultan/arch/arm64/configs/gs201_defconfig" \
+            -o common/arch/arm64/configs/gki_defconfig
+
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
           git clone --depth=1 --single-branch --no-tags "${{ env.SCRIPTS_REPO }}" sh &
@@ -657,6 +684,7 @@ jobs:
           rm -f android/abi_gki_protected_exports_* || true
           sed -i 's/ -dirty//g' scripts/setlocalversion 2>/dev/null || true
           sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' scripts/setlocalversion 2>/dev/null || true
+          sed -i 's/check_defconfig//' build.config.gki 2>/dev/null || true
 
           SUSFS_VER="unknown"
           if [ -f "../susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
@@ -682,7 +710,22 @@ jobs:
         working-directory: common
         run: |
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/$KSU_BRANCH/kernel/setup.sh" | bash -s -- "$KSU_BRANCH"
+          echo "Integrating xxKSU ($KSU_BRANCH)..."
+          git clone --depth=1 --branch="$KSU_BRANCH" https://github.com/${{ env.KSU_REPO }}.git KernelSU
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+
+          grep -q "kernelsu" drivers/Makefile || \
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+
+          grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig || \
+            sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+
+          K_VER="${{ steps.meta.outputs.ksu_ver }}"
+          KSU_MAKEFILE="drivers/kernelsu/Makefile"
+          if [ -f "$KSU_MAKEFILE" ]; then
+            echo "" >> "$KSU_MAKEFILE"
+            echo "CFLAGS_ksu.o += -DKSU_VERSION=$K_VER" >> "$KSU_MAKEFILE"
+          fi
 
       - name: Apply SuSFS Patches
         if: matrix.enable_susfs == 'true'
@@ -695,8 +738,7 @@ jobs:
           patch -p1 < "${{ github.workspace }}/.github/patches/xxksu/51_deinlined_susfs_hooks_gki-android14-6.1.patch" || true
 
           echo "Applying SuSFS patch to KernelSU..."
-          cd KernelSU
-          patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"
+          ( cd KernelSU && patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch" )
 
       - name: Generate Defconfig
         working-directory: common
@@ -707,8 +749,8 @@ jobs:
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
           echo "⚙️ Generating GKI defconfig..."
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" gki_defconfig || \
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" defconfig KBUILD_DEFCONFIG=gki_defconfig || \
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out gki_defconfig || \
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out defconfig KBUILD_DEFCONFIG=gki_defconfig || \
           {
             echo "Fallback copying arch/arm64/configs/gki_defconfig to out/.config..."
             mkdir -p out
@@ -735,28 +777,29 @@ jobs:
           LLVM_IAS: 1
           CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
         run: |
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="${CLANG_PATH}clang" olddefconfig 2>&1 | grep -v "warning: override" || true
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out olddefconfig 2>&1 | grep -v "warning: override" || true
 
       - name: Build Kernel (Production)
         working-directory: common
-        env:
-          ARCH: arm64
-          LLVM: 1
-          LLVM_IAS: 1
-          CROSS_COMPILE: ${{ env.TOOLCHAIN_PATH }}
-          KBUILD_BUILD_USER: build-user
-          KBUILD_BUILD_HOST: build-host
-          CCACHE_BASEDIR: ${{ github.workspace }}
-          KCFLAGS: "-O2 -Wno-error"
-          KBUILD_GENDWARFKSYMS_STABLE: 1
         run: |
           if [ "${{ github.event.inputs.use_ccache }}" != "false" ]; then
             CC_CMD="ccache ${CLANG_PATH}clang"
           else
             CC_CMD="${CLANG_PATH}clang"
           fi
+
+          export KCFLAGS="-O2 -Wno-error"
+          export KBUILD_BUILD_USER="build-user"
+          export KBUILD_BUILD_HOST="build-host"
+          export KBUILD_BUILD_TIMESTAMP="Fri Jan 9 16:33:46 UTC 2026"
+          export KBUILD_GENDWARFKSYMS_STABLE=1
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          export CC="$CC_CMD"
+          export CROSS_COMPILE="${{ env.TOOLCHAIN_PATH }}"
+
           echo "Compiling GKI kernel with CC: $CC_CMD"
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CC="$CC_CMD" -j"$(nproc --all)" Image
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=out Image
 
       - name: Ccache Performance Stats
         if: github.event.inputs.use_ccache != 'false'
