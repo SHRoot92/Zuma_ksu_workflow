@@ -730,8 +730,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME=$(date +"%y%m%d")
-          TITLE="Pixel 7/Pro (Pantah) Kernel ${KERNEL_VER_FULL} - KernelSU"
+          TAG_NAME="$(date +"%y%m%d")-gki"
+          if [ "${{ github.event.inputs.ksu_branch }}" = "staging" ]; then
+            TITLE="Pixel 7 Series (Pantah) Google Official ACK Kernel ${KERNEL_VER_FULL} - KernelSU (Staging)"
+          else
+            TITLE="Pixel 7 Series (Pantah) Google Official ACK Kernel ${KERNEL_VER_FULL} - KernelSU"
+          fi
 
           echo "🚀 Publishing/Updating release for tag: $TAG_NAME"
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
