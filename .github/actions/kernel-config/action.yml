@@ -4,18 +4,10 @@ inputs:
   defconfig_path:
     description: 'Path to the defconfig or .config file'
     required: true
-  build_config_path:
-    description: 'Path to the build.config file (optional)'
-    required: false
-    default: ''
   hook_mode:
     description: 'Hook mode (manual, lsm)'
     required: false
     default: 'manual'
-  variant:
-    description: 'Legacy variant input for backwards compatibility (xxksu, xxksu_staging, xxksu_manual)'
-    required: false
-    default: ''
   enable_susfs:
     description: 'Set to "true" to inject SuSFS configs'
     required: false
@@ -107,38 +99,22 @@ runs:
         CONFIG_TCP_CONG_ADVANCED=y
         CONFIG_TCP_CONG_BBR=y
         CONFIG_NET_SCH_FQ=y
-        # CONFIG_TCP_CONG_BIC is not set
-        # CONFIG_TCP_CONG_WESTWOOD is not set
-        # CONFIG_TCP_CONG_HTCP is not set
         CONFIG_DEFAULT_BBR=y
         EOF
 
-        # Hook Mode Resolution (handles hook_mode and legacy variant input)
+        # Hook Mode Resolution
         HOOK_MODE="${{ inputs.hook_mode }}"
-        if [ -n "${{ inputs.variant }}" ]; then
-          if [ "${{ inputs.variant }}" = "xxksu_manual" ]; then
-            HOOK_MODE="manual"
-          elif [ "${{ inputs.variant }}" = "xxksu" ] || [ "${{ inputs.variant }}" = "xxksu_staging" ]; then
-            HOOK_MODE="lsm"
-          fi
-        fi
 
         if [ "$HOOK_MODE" = "manual" ]; then
           cat >> "$DEFCONFIG" <<-'EOF'
         CONFIG_KSU=y
-        CONFIG_KSU_EXTRAS=y
         CONFIG_KSU_LSM_SECURITY_HOOKS=n
-        CONFIG_KSU_KPROBES_KSUD=n
         EOF
         elif [ "$HOOK_MODE" = "lsm" ]; then
           cat >> "$DEFCONFIG" <<-'EOF'
         CONFIG_KSU=y
-        CONFIG_KSU_EXTRAS=y
-        # CONFIG_KSU_ALLOWLIST_WORKAROUND is not set
-        # CONFIG_KSU_DEBUG is not set
-        # CONFIG_KSU_KPROBES_HOOK is not set
-        CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
         CONFIG_KSU_LSM_SECURITY_HOOKS=y
+        CONFIG_KSU_HACK_ARM64_BRANCH_LINK=y
         CONFIG_KSU_THRONE_TRACKER_ALWAYS_THREADED=y
         EOF
         fi
