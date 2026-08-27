@@ -379,11 +379,17 @@ jobs:
           RAW_CLANG_STR=$("${CLANG_PATH}clang" --version 2>&1 | head -n1)
           TOOLCHAIN_DISPLAY="$RAW_CLANG_STR"
 
-          V_MAJOR=$(grep -E '^VERSION =' common/Makefile | awk '{print $3}' | tr -d '\r')
-          V_PATCH=$(grep -E '^PATCHLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
-          V_SUB=$(grep -E '^SUBLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
+          # Dynamically determine kernel version from kernel source
+          KERNEL_VER_FULL=$(make -C common -s kernelversion 2>/dev/null || true)
+          if [ -z "$KERNEL_VER_FULL" ]; then
+            V_MAJOR=$(grep -E '^VERSION =' common/Makefile | awk '{print $3}' | tr -d '\r')
+            V_PATCH=$(grep -E '^PATCHLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
+            V_SUB=$(grep -E '^SUBLEVEL =' common/Makefile | awk '{print $3}' | tr -d '\r')
+            KERNEL_VER_FULL="${V_MAJOR}.${V_PATCH}.${V_SUB:-0}"
+          fi
+          V_MAJOR=$(echo "$KERNEL_VER_FULL" | cut -d. -f1)
+          V_PATCH=$(echo "$KERNEL_VER_FULL" | cut -d. -f2)
           KERNEL_VER="${V_MAJOR}.${V_PATCH}"
-          KERNEL_VER_FULL="${V_MAJOR}.${V_PATCH}.${V_SUB:-0}"
 
           SUSFS_VER="unknown"
           if [ -f "susfs4ksu/kernel_patches/include/linux/susfs.h" ]; then
@@ -661,7 +667,7 @@ jobs:
           EOF
 
           echo "- 📅 **Build Timestamp**: \`${DATE} ${TIME} (UTC)\`" >> release_note.md
-          echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL:-6.1.162} (Pantah 15260412)\`" >> release_note.md
+          echo "- 🐧 **Kernel Base**: \`Linux ${KERNEL_VER_FULL} (Pantah 15260412)\`" >> release_note.md
           echo "- 🔧 **KernelSU**: \`${KSU_BRANCH}\` (v\`${KSU_VER:-latest}\`)" >> release_note.md
           if [ -n "${SUSFS_VER}" ] && [ "${SUSFS_VER}" != "unknown" ]; then
             echo "- 🛡️ **SuSFS Engine**: \`v${SUSFS_VER}\` (GKI android14-6.1)" >> release_note.md
@@ -703,7 +709,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME=$(date +"%y%m%d")
-          TITLE="Pixel 7/Pro (Pantah) Kernel ${{ env.KERNEL_VER_FULL || '6.1.162' }} - KernelSU"
+          TITLE="Pixel 7/Pro (Pantah) Kernel ${KERNEL_VER_FULL} - KernelSU"
 
           echo "🚀 Publishing/Updating release for tag: $TAG_NAME"
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then

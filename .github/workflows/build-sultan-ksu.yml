@@ -265,17 +265,17 @@ jobs:
             TOOLCHAIN_DISPLAY="$RAW_TOOLCHAIN_STR"
           fi
           
-          # Get kernel version
-          V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
-          V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
-          V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}')
-          if [ -n "$V_SUB" ]; then
-            KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
-          else
-            KERNEL_VER="${V_MAJOR}.${V_PATCH}"
-          fi
-          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = ".." ]; then
-            KERNEL_VER="6.1.162"
+          # Get kernel version dynamically from kernel
+          KERNEL_VER=$(make -C sultan -s kernelversion 2>/dev/null || true)
+          if [ -z "$KERNEL_VER" ]; then
+            V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            if [ -n "$V_SUB" ]; then
+              KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
+            else
+              KERNEL_VER="${V_MAJOR}.${V_PATCH}"
+            fi
           fi
           
           # Get SuSFS version
@@ -769,17 +769,17 @@ jobs:
             TOOLCHAIN_DISPLAY="$RAW_TOOLCHAIN_STR"
           fi
           
-          # Get kernel version
-          V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}')
-          V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}')
-          V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}')
-          if [ -n "$V_SUB" ]; then
-            KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
-          else
-            KERNEL_VER="${V_MAJOR}.${V_PATCH}"
-          fi
-          if [ -z "$KERNEL_VER" ] || [ "$KERNEL_VER" = ".." ]; then
-            KERNEL_VER="6.1.162"
+          # Get kernel version dynamically from kernel
+          KERNEL_VER=$(make -C sultan -s kernelversion 2>/dev/null || true)
+          if [ -z "$KERNEL_VER" ]; then
+            V_MAJOR=$(grep -E '^VERSION =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            V_PATCH=$(grep -E '^PATCHLEVEL =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            V_SUB=$(grep -E '^SUBLEVEL =' sultan/Makefile | awk '{print $3}' | tr -d '\r')
+            if [ -n "$V_SUB" ]; then
+              KERNEL_VER="${V_MAJOR}.${V_PATCH}.${V_SUB}"
+            else
+              KERNEL_VER="${V_MAJOR}.${V_PATCH}"
+            fi
           fi
           
           # Get SuSFS version
@@ -1124,9 +1124,9 @@ jobs:
           DEBUG_NOTE=""
           if [ "$KSU_BRANCH" = "staging" ]; then
             PRERELEASE_FLAG="--prerelease"
-            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel 6.1.162 - KernelSU (Staging)"
+            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel ${KERNEL_VER} - KernelSU (Staging)"
           else
-            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel 6.1.162 - KernelSU"
+            RELEASE_TITLE="Pixel 7/Pro (Pantah) Sultan Kernel ${KERNEL_VER} - KernelSU"
           fi
           BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
