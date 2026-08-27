@@ -221,15 +221,18 @@ jobs:
             mkdir -p temp_pantah
             tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
-            SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "ack" | head -n1)
-            if [ -z "$SRC_DIR" ]; then
-              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "common" | head -n1)
+            if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+            elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
+            elif [ -d "temp_pantah/common/ack" ]; then
+              cp -a temp_pantah/common/ack/. common/
+            elif [ -f "temp_pantah/Makefile" ]; then
+              cp -a temp_pantah/. common/
+            else
+              echo "❌ ERROR: Could not locate kernel source tree in pantah archive"
+              exit 1
             fi
-            if [ -z "$SRC_DIR" ]; then
-              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | head -n1)
-            fi
-            echo "Found kernel source directory: $SRC_DIR"
-            cp -a "$SRC_DIR"/. common/
             rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
@@ -239,6 +242,13 @@ jobs:
             tar -xzf common.tar.gz -C common
             rm -f common.tar.gz
           fi
+
+          if [ ! -f "common/Makefile" ] || [ ! -d "common/drivers" ]; then
+            echo "❌ ERROR: common/Makefile or common/drivers directory not found after source extraction!"
+            exit 1
+          fi
+          echo "✅ Kernel source tree successfully placed in common/:"
+          ls -la common
 
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
@@ -590,15 +600,18 @@ jobs:
             mkdir -p temp_pantah
             tar -xf pantah.tar.xz -C temp_pantah
             rm -f pantah.tar.xz
-            SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "ack" | head -n1)
-            if [ -z "$SRC_DIR" ]; then
-              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | grep -E "common" | head -n1)
+            if [ -d "temp_pantah/kernel-pantah-15260412/common/ack" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/ack/. common/
+            elif [ -d "temp_pantah/kernel-pantah-15260412/common/gki" ]; then
+              cp -a temp_pantah/kernel-pantah-15260412/common/gki/. common/
+            elif [ -d "temp_pantah/common/ack" ]; then
+              cp -a temp_pantah/common/ack/. common/
+            elif [ -f "temp_pantah/Makefile" ]; then
+              cp -a temp_pantah/. common/
+            else
+              echo "❌ ERROR: Could not locate kernel source tree in pantah archive"
+              exit 1
             fi
-            if [ -z "$SRC_DIR" ]; then
-              SRC_DIR=$(find temp_pantah -name "Makefile" -exec dirname {} \; | head -n1)
-            fi
-            echo "Found kernel source directory: $SRC_DIR"
-            cp -a "$SRC_DIR"/. common/
             rm -rf temp_pantah
           else
             ARCHIVE_URL="https://android.googlesource.com/kernel/common/+archive/refs/heads/${GKI_VER}.tar.gz"
@@ -608,6 +621,13 @@ jobs:
             tar -xzf common.tar.gz -C common
             rm -f common.tar.gz
           fi
+
+          if [ ! -f "common/Makefile" ] || [ ! -d "common/drivers" ]; then
+            echo "❌ ERROR: common/Makefile or common/drivers directory not found after source extraction!"
+            exit 1
+          fi
+          echo "✅ Kernel source tree successfully placed in common/:"
+          ls -la common
 
           git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" AK3 &
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
