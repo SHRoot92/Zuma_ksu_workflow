@@ -196,7 +196,7 @@ jobs:
           git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan &
           PID_SULTAN=$!
           
-          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3 &
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-zuma AK3 &
           PID_AK3=$!
           
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
@@ -427,7 +427,7 @@ jobs:
           CC: ${{ env.TOOLCHAIN_PATH }}gcc
         run: |
           echo "⚙️ Generating defconfig..."
-          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" gs201_defconfig || { echo "❌ Failed to generate defconfig"; exit 1; }
+          make O=out CROSS_COMPILE="$CROSS_COMPILE" CC="$CC" zuma_defconfig || { echo "❌ Failed to generate defconfig"; exit 1; }
 
       - name: Inject Defconfig Flags
         uses: ./.github/actions/kernel-config
@@ -504,7 +504,7 @@ jobs:
           
           # Copy kernel and DTB
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4 || { echo "❌ Failed to copy Image.lz4"; exit 1; }
-          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb || { echo "❌ Failed to copy DTB"; exit 1; }
+          cat sultan/out/google-devices/zuma/dts/*.dtb > AK3/dtb || { echo "❌ Failed to copy DTB"; exit 1; }
           
           DATE=$(date +'%y%m%d')
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
@@ -521,7 +521,7 @@ jobs:
             SUSFS_TAG=""
           fi
           
-          BASE_NAME="KSU_Sultan_gs201_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-manual${SUSFS_TAG}-${DATE}"
+          BASE_NAME="KSU_Sultan_zuma_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-manual${SUSFS_TAG}-${DATE}"
           ZIP_NAME="${BASE_NAME}.zip"
           
           echo "📦 Packaging AnyKernel3: $ZIP_NAME"
@@ -704,7 +704,7 @@ jobs:
           git clone --depth=1 --single-branch --no-tags https://github.com/kerneltoast/android_kernel_google_tensynos -b 16.0.0-sultan sultan &
           PID_SULTAN=$!
           
-          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-gs201 AK3 &
+          git clone --depth=1 --single-branch --no-tags "${{ env.ANYKERNEL_REPO }}" -b sultan-zuma AK3 &
           PID_AK3=$!
           
           git clone --depth=1 --single-branch --no-tags "${{ env.PATCHES_REPO }}" kernel_patches &
@@ -988,7 +988,7 @@ jobs:
           
           # Copy kernel and DTB
           cp sultan/out/arch/arm64/boot/Image.lz4 AK3/Image.lz4 || { echo "❌ Failed to copy Image.lz4"; exit 1; }
-          cat sultan/out/google-devices/gs201/dts/*.dtb > AK3/dtb || { echo "❌ Failed to copy DTB"; exit 1; }
+          cat sultan/out/google-devices/zuma/dts/*.dtb > AK3/dtb || { echo "❌ Failed to copy DTB"; exit 1; }
           
           DATE=$(date +'%y%m%d')
           KSU_BRANCH="${{ github.event.inputs.ksu_branch || 'master' }}"
@@ -1005,7 +1005,7 @@ jobs:
             SUSFS_TAG=""
           fi
           
-          BASE_NAME="KSU_Sultan_gs201_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-lsm${SUSFS_TAG}-${DATE}"
+          BASE_NAME="KSU_Sultan_zuma_${KERNEL_VER}+${K_VER}${BRANCH_TAG}-lsm${SUSFS_TAG}-${DATE}"
           ZIP_NAME="${BASE_NAME}.zip"
           
           echo "📦 Packaging AnyKernel3: $ZIP_NAME"
@@ -1140,19 +1140,19 @@ jobs:
           PRERELEASE_FLAG=""
           if [ "$KSU_BRANCH" = "staging" ]; then
             PRERELEASE_FLAG="--prerelease"
-            RELEASE_TITLE="Pixel 7 Sultan Kernel ${KERNEL_VER} (Staging)"
+            RELEASE_TITLE="Pixel 8 Sultan Kernel ${KERNEL_VER} (Staging)"
           else
-            RELEASE_TITLE="Pixel 7 Sultan Kernel ${KERNEL_VER}"
+            RELEASE_TITLE="Pixel 8 Sultan Kernel ${KERNEL_VER}"
           fi
           BUILD_TIME="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
           {
-            echo "## 📱 Pixel 7 Sultan Kernel"
+            echo "## 📱 Pixel 8 Sultan Kernel"
             echo ""
             echo "### 🚀 Build Info"
             echo "| Item | Details |"
             echo "| :--- | :--- |"
-            echo "| **Device** | Google Pixel 7 / 7 Pro (\`gs201\` — Cheetah / Panther) |"
+            echo "| **Device** | Google Pixel 8 / 8 Pro (\`zuma\` — Husky / Shiba) |"
             echo "| **Kernel Base** | Sultan Kernel (Linux $KERNEL_VER) |"
             echo "| **KernelSU** | $KSU_DISPLAY |"
             echo "| **SuSFS** | $SUSFS_DISPLAY |"
