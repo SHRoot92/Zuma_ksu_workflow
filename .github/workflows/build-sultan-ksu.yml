@@ -904,10 +904,16 @@ jobs:
           
           echo "🔧 Applying SuSFS patch to KernelSU..."
           cd KernelSU
-          if ! patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"; then
-            echo "❌ ERROR: Failed to apply KernelSU SuSFS patch"
-            exit 1
+          if ! patch -p1 -l --fuzz=3 < <(curl -fsSL "https://github.com/midori01/KernelSU/commit/245535658a03519eb3e79e5fb1a9d5acd91eb5d0.patch"); then
+          echo "❌ ERROR: Failed to apply KernelSU SuSFS patch"
+          exit 1
           fi
+          
+          #cd KernelSU
+          #if ! patch -p1 -l --fuzz=3 < "${{ github.workspace }}/.github/patches/xxksu/11_enable_susfs_for_ksu.patch"; then
+          #  echo "❌ ERROR: Failed to apply KernelSU SuSFS patch"
+          #  exit 1
+          #fi
           cd ..
           echo "✅ SuSFS patches applied successfully"
 
