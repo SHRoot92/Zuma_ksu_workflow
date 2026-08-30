@@ -1,11 +1,14 @@
-From: midori01 <lv@lvlv.lv>
-Date: Fri, 28 Aug 2026 13:50:24 +0900
-Subject: [PATCH] Enable SUSFS for MidoriSU-XX
+From caeb494e531a29a25a789897496c23d6a6907a14 Mon Sep 17 00:00:00 2001
+From: midori01 <midori01@users.noreply.github.com>
+Date: Sat, 22 Aug 2026 14:29:04 +0900
+Subject: [PATCH] susfs
 
+Signed-off-by: midori01 <midori01@users.noreply.github.com>
+Signed-off-by: midori01 <lv@lvlv.lv>
 ---
- kernel/Kconfig                        |  98 +++++++++++++++
+ kernel/Kconfig                        |  99 +++++++++++++++
  kernel/downstream/ksu_hostsredirect.h |   4 +
- kernel/feature/kernel_umount.c        |  54 +++++---
+ kernel/feature/kernel_umount.c        |  62 +++++++---
  kernel/hook/setuid_hook.c             | 169 +++++++++++++++++++++++---
  kernel/ksu.c                          |   8 ++
  kernel/selinux/rules.c                |   7 ++
@@ -13,117 +16,118 @@ Subject: [PATCH] Enable SUSFS for MidoriSU-XX
  kernel/selinux/selinux.h              |  14 +++
  kernel/supercall/dispatch.c           |  24 ++++
  kernel/supercall/supercall.c          |  99 +++++++++++++++
- 10 files changed, 545 insertions(+), 35 deletions(-)
+ 10 files changed, 552 insertions(+), 37 deletions(-)
 
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index 18b97b7f5..77df2e4bb 100644
+index 18b97b7f54a4..6e74997b342b 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
-@@ -128,4 +128,102 @@ config KSU_HEURISTIC_IN_TREE_BUILD
+@@ -128,4 +128,103 @@ config KSU_HEURISTIC_IN_TREE_BUILD
  	depends on KSU
  	default y
  
 +menu "KernelSU - SUSFS"
++
 +config KSU_SUSFS
-+    bool "KernelSU addon - SUSFS"
-+    depends on KSU
-+    depends on THREAD_INFO_IN_TASK
-+    default y
-+    help
-+        Patch and Enable SUSFS to kernel with KernelSU.
++	bool "KernelSU addon - SUSFS"
++	depends on KSU
++	depends on THREAD_INFO_IN_TASK
++	default y
++	help
++	  Patch and Enable SUSFS to kernel with KernelSU.
 +
 +config KSU_SUSFS_SUS_PATH
-+    bool "Enable to hide suspicious path (NOT recommended)"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow hiding the user-defined path and all its sub-paths from various system calls.
-+        - Includes temp fix for the leaks of app path in /sdcard/Android/data directory.
-+        - Effective only on zygote spawned user app process.
-+        - Use with cautious as it may cause performance loss and will be vulnerable to side channel attacks,
-+          just disable this feature if it doesn't work for you or you don't need it at all.
++	bool "Enable to hide suspicious path (NOT recommended)"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow hiding the user-defined path and all its sub-paths from various system calls.
++	  - Includes temp fix for the leaks of app path in /sdcard/Android/data directory.
++	  - Effective only on zygote spawned user app process.
++	  - Use with cautious as it may cause performance loss and will be vulnerable to side channel attacks,
++	    just disable this feature if it doesn't work for you or you don't need it at all.
 +
 +config KSU_SUSFS_SUS_MOUNT
-+    bool "Enable to hide suspicious mounts"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow hiding the user-defined mount paths from /proc/self/[mounts|mountinfo|mountstat].
-+        - Effective on all processes for hiding mount entries.
-+        - mnt_id and mnt_group_id of the sus mount will be assigned to a much bigger number to solve the ssue of id not being contiguous.
++	bool "Enable to hide suspicious mounts"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow hiding the user-defined mount paths from /proc/self/[mounts|mountinfo|mountstat].
++	  - Effective on all processes for hiding mount entries.
++	  - mnt_id and mnt_group_id of the sus mount will be assigned to a much bigger number to solve the issue of id not being contiguous.
 +
 +config KSU_SUSFS_SUS_KSTAT
-+    bool "Enable to spoof suspicious kstat"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow spoofing the kstat of user-defined file/directory.
-+        - Effective only on zygote spawned user app process.
++	bool "Enable to spoof suspicious kstat"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow spoofing the kstat of user-defined file/directory.
++	  - Effective only on zygote spawned user app process.
 +
 +config KSU_SUSFS_TRY_UMOUNT
 +	bool "Enable to use ksu's try_umount"
 +	depends on KSU_SUSFS
 +	default y
 +	help
-+		- Allow using try_umount to umount other user-defined mount paths prior to ksu's default umount paths.
-+		- Effective only on zygote spawned umounted user app process.
++	  - Allow using try_umount to umount other user-defined mount paths prior to ksu's default umount paths.
++	  - Effective only on zygote spawned umounted user app process.
 +
 +config KSU_SUSFS_SPOOF_UNAME
-+    bool "Enable to spoof uname"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow spoofing the string returned by uname syscall to user-defined string.
-+        - Effective on all processes.
++	bool "Enable to spoof uname"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow spoofing the string returned by uname syscall to user-defined string.
++	  - Effective on all processes.
 +
 +config KSU_SUSFS_ENABLE_LOG
-+    bool "Enable logging susfs log to kernel"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow logging susfs log to kernel, uncheck it to completely disable all susfs log.
++	bool "Enable logging susfs log to kernel"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow logging susfs log to kernel, uncheck it to completely disable all susfs log.
 +
 +config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
-+    bool "Enable to automatically hide ksu and susfs symbols from /proc/kallsyms"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Automatically hide ksu and susfs symbols from '/proc/kallsyms'.
-+        - Effective on all processes.
++	bool "Enable to automatically hide ksu and susfs symbols from /proc/kallsyms"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Automatically hide ksu and susfs symbols from '/proc/kallsyms'.
++	  - Effective on all processes.
 +
 +config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
-+    bool "Enable to spoof /proc/bootconfig (gki) or /proc/cmdline (non-gki)"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Spoof the output of /proc/bootconfig (gki) or /proc/cmdline (non-gki) with a user-defined file.
-+        - Effective on all processes.
++	bool "Enable to spoof /proc/bootconfig (gki) or /proc/cmdline (non-gki)"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Spoof the output of /proc/bootconfig (gki) or /proc/cmdline (non-gki) with a user-defined file.
++	  - Effective on all processes.
 +
 +config KSU_SUSFS_OPEN_REDIRECT
-+    bool "Enable to redirect a path to be opened with another path (experimental)"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow redirecting a target path to be opened with another user-defined path.
-+        - Effective only on processes with uid < 2000.
-+        - Please be reminded that process with open access to the target and redirected path can be detected.
++	bool "Enable to redirect a path to be opened with another path (experimental)"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow redirecting a target path to be opened with another user-defined path.
++	  - Effective only on processes with uid < 2000.
++	  - Please be reminded that process with open access to the target and redirected path can be detected.
 +
 +config KSU_SUSFS_SUS_MAP
-+    bool "Enable to hide some mmapped real file from different proc maps interfaces"
-+    depends on KSU_SUSFS
-+    default y
-+    help
-+        - Allow hiding mmapped real file from /proc/<pid>/[maps|smaps|smaps_rollup|map_files|mem|pagemap]
-+        - It does NOT support hiding for anon memory.
-+        - It does NOT hide any inline hooks or plt hooks cause by the injected library itself.
-+        - It may not be able to evade detections by apps that implement a good injection detection.
-+        - Effective only on zygote spawned umounted user app process.
++	bool "Enable to hide some mmapped real file from different proc maps interfaces"
++	depends on KSU_SUSFS
++	default y
++	help
++	  - Allow hiding mmapped real file from /proc/<pid>/[maps|smaps|smaps_rollup|map_files|mem|pagemap]
++	  - It does NOT support hiding for anon memory.
++	  - It does NOT hide any inline hooks or plt hooks cause by the injected library itself.
++	  - It may not be able to evade detections by apps that implement a good injection detection.
++	  - Effective only on zygote spawned umounted user app process.
 +
 +endmenu
 +
  endmenu
 diff --git a/kernel/downstream/ksu_hostsredirect.h b/kernel/downstream/ksu_hostsredirect.h
-index 07e7ca99c..c5a5ef8b3 100644
+index 07e7ca99c4a9..c5a5ef8b3e0b 100644
 --- a/kernel/downstream/ksu_hostsredirect.h
 +++ b/kernel/downstream/ksu_hostsredirect.h
 @@ -14,7 +14,11 @@
@@ -139,7 +143,7 @@ index 07e7ca99c..c5a5ef8b3 100644
  static __always_inline void ksu_hosts_file_redirect(const char __user *filename, int flags, int *fd_ptr)
  {
 diff --git a/kernel/feature/kernel_umount.c b/kernel/feature/kernel_umount.c
-index 3d6eb6f1e..001b1f0b1 100644
+index 3d6eb6f1e63f..71897039dcf1 100644
 --- a/kernel/feature/kernel_umount.c
 +++ b/kernel/feature/kernel_umount.c
 @@ -1,5 +1,14 @@
@@ -158,24 +162,27 @@ index 3d6eb6f1e..001b1f0b1 100644
  
  static int kernel_umount_feature_get(u64 *value)
  {
-@@ -45,14 +54,27 @@ static const struct ksu_feature_handler webview_zygote_umount_handler = {
+@@ -45,14 +54,29 @@ static const struct ksu_feature_handler webview_zygote_umount_handler = {
  
  extern int path_umount(struct path *path, int flags);
  
+-static inline void ksu_umount_mnt(const char *mnt, struct path *path, int flags)
 +#ifndef KSU_HAS_PATH_UMOUNT
- static inline void ksu_umount_mnt(const char *mnt, struct path *path, int flags)
++static inline int ksu_umount_mnt(const char *mnt, struct path *path, int flags)
  {
  	int err = path_umount(path, flags);
  	if (err)
  		pr_info("umount %s failed: %d\n", mnt, err);
- }
++	return err;
++}
 +#else
-+static inline void ksu_umount_mnt(struct path *path, int flags)
++static inline int ksu_umount_mnt(struct path *path, int flags)
 +{
 +	int err = path_umount(path, flags);
 +	if (err)
 +		pr_info("umount failed: %d\n", err);
-+}
++	return err;
+ }
 +#endif
  
 -static inline void try_umount(const char *mnt, int flags)
@@ -187,16 +194,19 @@ index 3d6eb6f1e..001b1f0b1 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -66,14 +88,20 @@ static inline void try_umount(const char *mnt, int flags)
+@@ -66,14 +90,22 @@ static inline void try_umount(const char *mnt, int flags)
  		return;
  	}
  
+-	ksu_umount_mnt(mnt, &path, flags);
 +#ifndef KSU_HAS_PATH_UMOUNT
- 	ksu_umount_mnt(mnt, &path, flags);
++	err = ksu_umount_mnt(mnt, &path, flags);
 +#else
-+	ksu_umount_mnt(&path, flags);
++	err = ksu_umount_mnt(&path, flags);
 +#endif
-+	path_put(&path);
++	if (err) {
++		path_put(&path);
++	}
  }
  
 -static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
@@ -212,7 +222,7 @@ index 3d6eb6f1e..001b1f0b1 100644
  	if (!ksu_kernel_umount_enabled)
  		return 0;
  
-@@ -81,6 +109,10 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
+@@ -81,6 +113,10 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
  	if (!ksu_module_mounted)
  		return 0;
  
@@ -223,7 +233,7 @@ index 3d6eb6f1e..001b1f0b1 100644
  	// There are 6 scenarios:
  	// 1. Normal app: zygote -> appuid
  	// 2. Isolated process forked from zygote: zygote -> isolated_process
-@@ -94,16 +126,6 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
+@@ -94,16 +130,6 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
  	if (!ksu_uid_should_umount(new_uid) && !is_isolated_process(new_uid))
  		return 0;
  
@@ -241,7 +251,7 @@ index 3d6eb6f1e..001b1f0b1 100644
  	set_thread_flag(TIF_KSU_UNMOUNTABLE);
  #endif
 diff --git a/kernel/hook/setuid_hook.c b/kernel/hook/setuid_hook.c
-index 925798048..c0cdcad33 100644
+index 925798048a86..c0cdcad3327a 100644
 --- a/kernel/hook/setuid_hook.c
 +++ b/kernel/hook/setuid_hook.c
 @@ -1,4 +1,137 @@
@@ -425,7 +435,7 @@ index 925798048..c0cdcad33 100644
 +#endif
  }
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index ff786d174..7441a2200 100644
+index ff786d174644..7441a22002f8 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
 @@ -152,6 +152,10 @@
@@ -451,10 +461,10 @@ index ff786d174..7441a2200 100644
  
  	ksu_file_wrapper_init();
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 12a7a1709..9f7743f33 100644
+index 12a7a1709b89..9f7743f33649 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
-@@ -200,6 +200,13 @@ out_flush:
+@@ -200,6 +200,13 @@ void apply_kernelsu_rules()
  	smp_mb();
  	reset_avc_cache();
  #endif
@@ -469,7 +479,7 @@ index 12a7a1709..9f7743f33 100644
  
  #define KSU_SEPOLICY_MAX_BATCH_SIZE (8U * 1024U * 1024U)
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 04e5ffe0c..e3bd796ce 100644
+index 04e5ffe0c46d..e3bd796ce2c4 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -227,3 +227,106 @@ void escape_to_root_for_adb_root(void)
@@ -580,7 +590,7 @@ index 04e5ffe0c..e3bd796ce 100644
 +}
 +#endif // #ifdef CONFIG_KSU_SUSFS
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index cbeac553d..42bdf7398 100644
+index cbeac553d20a..42bdf73980c2 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -13,6 +13,20 @@
@@ -605,7 +615,7 @@ index cbeac553d..42bdf7398 100644
  
  void setenforce(bool);
 diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
-index f4dcc40d5..e35085bbc 100644
+index f4dcc40d5b0b..e35085bbc46a 100644
 --- a/kernel/supercall/dispatch.c
 +++ b/kernel/supercall/dispatch.c
 @@ -1,3 +1,13 @@
@@ -658,7 +668,7 @@ index f4dcc40d5..e35085bbc 100644
  #if 0 // TODO: revisit this sometime
  		case KSU_MARK_MARK: { break; }
 diff --git a/kernel/supercall/supercall.c b/kernel/supercall/supercall.c
-index 8c207930d..f8a4276a3 100644
+index 8c207930ddb0..f8a4276a3c2c 100644
 --- a/kernel/supercall/supercall.c
 +++ b/kernel/supercall/supercall.c
 @@ -1,3 +1,9 @@
@@ -771,6 +781,3 @@ index 8c207930d..f8a4276a3 100644
  
  	// when ternary on fmt?
  	// cold syscall, we can splurge xD
--- 
-2.55.0
-
