@@ -1,111 +1,50 @@
-# Sultan & GKI Kernel for Google Pixel 7 / Pro (gs201)
+# Sultan & GKI Kernel for Google Pixel 8 / Pixel 8 Pro (zuma)
 
-Automated GitHub Actions CI/CD pipeline for building and packaging **Sultan Kernel** and **Official Google ACK GKI Kernel (Android 14 6.1)** with **KernelSU (xxKSU)** and **SuSFS** for Google Tensor G2 devices (`gs201` — Cheetah, Panther, Lynx, Felix, Tangorpro).
+Automated GitHub Actions CI/CD workflows for building kernel variants for Google Tensor G3 devices: **Google Pixel 8 (`shiba`)** and **Google Pixel 8 Pro (`husky`)**. Both devices use the shared **zuma / shusky** kernel platform. The workflows retain KernelSU (xxKSU) and optional SuSFS integration.
 
----
+## Supported devices (only)
 
-## 📱 Supported Devices
+| Codename | Device | SoC / platform | Kernel family |
+|---|---|---|---|
+| `shiba` | Google Pixel 8 | Google Tensor G3 (`zuma`) | Android common 6.1 / Sultan zuma target |
+| `husky` | Google Pixel 8 Pro | Google Tensor G3 (`zuma`) | Android common 6.1 / Sultan zuma target |
 
-| Codename | Device Name | SoC / Platform | Kernel Base | Compatibility |
-| :--- | :--- | :--- | :--- | :---: |
-| **Cheetah** | Google Pixel 7 Pro | Google Tensor G2 (`gs201`) | Sultan (6.1) / ACK GKI (6.1) | 🌟 Full Native |
-| **Panther** | Google Pixel 7 | Google Tensor G2 (`gs201`) | Sultan (6.1) / ACK GKI (6.1) | 🌟 Full Native |
-| **Lynx** | Google Pixel 7a | Google Tensor G2 (`gs201`) | Sultan (6.1) / ACK GKI (6.1) | 🌟 Full Native |
-| **Felix** | Google Pixel Fold | Google Tensor G2 (`gs201`) | Sultan (6.1) / ACK GKI (6.1) | ✅ Compatible |
-| **Tangorpro** | Google Pixel Tablet | Google Tensor G2 (`gs201`) | Sultan (6.1) / ACK GKI (6.1) | ✅ Compatible |
+Pixel 7 series, Pixel 8a, Pixel Fold, Pixel Tablet, and other devices are not targets of this repository. The Pixel 8 and Pixel 8 Pro share the zuma kernel platform, but firmware and boot/vendor_boot packaging must still match the device's installed build.
 
-> **Supported OS**: Google Stock Android 14 / Android 15 (All QPRs), GrapheneOS, CalyxOS, LineageOS 21/22, and all GKI-compliant ROMs.
+## Workflows
 
----
+- **Build Google GKI KSU** — uses the official Google kernel manifest branch `android-gs-shusky-6.1-android16`.
+- **Build Sultan KSU** — builds the Sultan source against the zuma defconfig and zuma DTBs.
+- **Build Sultan 17 KSU** — Android 17 Sultan source workflow, using the zuma target.
+- **Test Sultan LD** — test build for the zuma target.
+- **Get Patch** — helper workflow for testing kernel patches.
 
-## 🤖 Automated Upstream Tracking & CI Triggering
+Each workflow supports the configured KernelSU branch, hook mode, optional SuSFS, caching, and release generation where provided by the workflow inputs.
 
-This repository features a fully automated upstream monitoring system:
-- **🔄 Scheduled Polling**: Automatically polls upstream repositories every **3 hours** (`cron: '0 */3 * * *'`).
-- **🎯 Dual-Upstream Tracking**:
-  - **KernelSU**: Monitors `backslashxx/KernelSU:master` for new commits.
-  - **SuSFS**: Monitors `gitlab.com/simonpunk/susfs4ksu:gki-android14-6.1` for new commits.
-- **🚀 Automated Build Dispatch**: Whenever an upstream update is detected, the workflow automatically updates state and triggers both Google GKI (`build-gki-ksu.yml`) and Sultan (`build-sultan-ksu.yml`) build pipelines concurrently.
-- **🏷️ Dynamic Commit Short Hash**: All release notes record and display the exact upstream commit IDs (e.g. `master (v32595 @ 06d3e0a)` and `SuSFS v2.2.0 (598370f)`).
+## Important compatibility notes
 
----
+- This repository has been adapted for Pixel 8 / Pixel 8 Pro, but GitHub Actions builds have **not** been run as part of this offline modification.
+- The Sultan workflow expects the upstream Sultan source to provide `zuma_defconfig` and `google-devices/zuma/dts/`, and expects the AnyKernel3 source to have a `sultan-zuma` branch. Confirm those upstream refs exist before running the workflow.
+- KernelSU and SuSFS patches must match the checked-out kernel revision. A successful compile alone does not prove compatibility with every stock firmware build.
+- Always keep a matching stock `boot.img` and `vendor_boot.img` available and verify the ZIP's device checks before flashing.
 
-## 🧹 Automated Safe Actions & Cache Cleanup
+## Build artifact naming
 
-An integrated, zero-dependency cleanup workflow runs daily at **04:00 AM Beijing Time (20:00 UTC)**:
-- **✅ Successful Runs**: Retains the latest **5** completed runs per workflow, automatically pruning older runs.
-- **⏱️ Failed/Cancelled Runs**: Preserves failed runs within **24 hours** for diagnostic troubleshooting, and automatically purges failure records older than 24 hours.
-- **⚡ Cache Optimization**: Prunes stale GitHub Actions caches older than **7 days** to maintain optimal Ccache speed within the 10GB repository limit.
-- **🔒 100% Release Protection**: Releases and Git Tags are **never deleted**, guaranteeing historical downloads remain accessible.
+Artifacts identify the `zuma` kernel platform and include the kernel version, KernelSU version/branch, hook mode, optional SuSFS version, and build date.
 
----
+## Installation
 
-## 📦 Release Artifact Naming Convention
+1. Download the artifact built for the exact Pixel 8 or Pixel 8 Pro firmware/kernel combination.
+2. Verify that the installer explicitly allows your device codename (`shiba` or `husky`).
+3. Keep a backup of the matching stock boot images and follow the maintainer's flashing instructions.
 
-Artifact packages follow the standardized naming format:
+## Disclaimer
 
-```text
-KSU_<Base>_gs201_<KernelVer>+<KSU_VER>[-staging]-<Hook>[-SUSFS_v<SuSFS_VER>]-<YYMMDD>.zip
-```
+Custom kernels can cause boot loops, loss of connectivity, or data loss. Flash at your own risk.
 
-### Examples:
-- **`KSU_Sultan_gs201_6.1.145+32595-manual-SUSFS_v2.2.0-260827.zip`**
-  *(Sultan: Manual Security Hooks + SuSFS, Stable KSU `master` release)*
-- **`KSU_GKI_gs201_6.1.162+32595-manual-SUSFS_v2.2.0-260827.zip`**
-  *(GKI: Manual Security Hooks + SuSFS, Stable KSU `master` release)*
-- **`KSU_GKI_gs201_6.1.162+32595-staging-lsm-SUSFS_v2.2.0-260827.zip`**
-  *(GKI: LSM Security Hooks + SuSFS, KSU `staging` pre-release)*
+## Credits
 
----
-
-## 🪝 Hook Modes & Variant Breakdown
-
-| Variant | Hook Mode | Description | Stealth / Recommendation |
-| :--- | :--- | :--- | :--- |
-| **`manual-SUSFS`** | Direct Patch (`manual`) | Inlines KSU hooks directly into kernel security functions. | 🛡️ **Highest stealth** (Recommended) |
-| **`manual`** | Direct Patch (`manual`) | Clean KernelSU integration via manual patches without SuSFS. | Standard root |
-| **`lsm-SUSFS`** | ARM64 BL Hookless (`lsm`) | Uses LSM security hooks with Branch-Link trampoline hooking. | Alternative hookless approach |
-| **`lsm`** | ARM64 BL Hookless (`lsm`) | Clean LSM security hooks without SuSFS. | Standard hookless root |
-
----
-
-## ⚡ Build Features & Performance Enhancements
-
-- **Toolchains**:
-  - **Google GKI**: Official Google Clang 17.0.6 (`r487747c`) + GCC 14.2 Toolchain.
-  - **Sultan GS201**: Bare-Metal ARM GNU Toolchain 14.2 (`aarch64-none-linux-gnu`).
-- **High-Efficiency Caching Suite**:
-  - 🧰 **Toolchain Cache**: Instant zero-delay compiler restoration via `actions/cache@v6.1.0`.
-  - ⚡ **Memory Tmpfs (`/dev/shm`)**: Intermediate compiler objects stored in RAM disk to eliminate virtual disk I/O latency.
-  - 🎯 **Ccache 90%+ Hit Rate**: Relocatable cache configuration compressing full builds down to minutes.
-  - 🚀 **Git Protocol v2 & HTTP/2**: Shallow single-branch fast cloning with zero patch collision.
-- **Networking & Routing Optimizations**:
-  - TCP Congestion: BBR v1 + FQ default
-  - Policy Routing (Table 1066) & 64k IPSet support
-  - Google VPN (XFRM) & TTL 64 share compatibility
-
----
-
-## 📥 Installation
-
-1. Download the flashable AnyKernel3 `.zip` matching your preference from [Releases](../../releases).
-2. Flash using any root/kernel manager app:
-   - [Kernel Flasher](https://github.com/capntrips/KernelFlasher)
-   - [Horizon Kernel Flasher](https://github.com/libxzr/HorizonKernelFlasher)
-   - Or flash via custom recovery (TWRP).
-3. Reboot your device.
-
----
-
-## 📜 Disclaimer
-
-Flashing custom kernels and modifying system partitions involves inherent risks. Please make sure you have backups before proceeding. **Proceed at your own risk.**
-
----
-
-## 🙏 Credits & Acknowledgements
-
-- **Sultan Kernel**: [kerneltoast (Sultan Alsawaf)](https://github.com/kerneltoast)
-- **KernelSU**: [tiann](https://github.com/tiann/KernelSU) & [backslashxx (xxKSU)](https://github.com/backslashxx/KernelSU)
-- **SuSFS**: [simonpunk](https://gitlab.com/simonpunk/susfs4ksu)
-- **AnyKernel3**: [osm0sis](https://github.com/osm0sis/AnyKernel3)
+- Sultan kernel: [kerneltoast](https://github.com/kerneltoast)
+- KernelSU / xxKSU: [tiann](https://github.com/tiann/KernelSU) and [backslashxx](https://github.com/backslashxx/KernelSU)
+- SuSFS: [simonpunk](https://gitlab.com/simonpunk/susfs4ksu)
+- AnyKernel3: [osm0sis](https://github.com/osm0sis/AnyKernel3)
